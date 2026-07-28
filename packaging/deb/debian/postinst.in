@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+PREFIX=/opt/openssl/@STREAM@
+
+if [ "$1" = "configure" ]; then
+    # Trust-anchor policy. Honours USE_SYSTEM_TRUST_ANCHORS from the installing
+    # environment (choose at install time:
+    #   USE_SYSTEM_TRUST_ANCHORS=no apt install openssl@STREAM@-upstream),
+    # else the previously recorded choice, else the default of using the
+    # system CA anchors. Identical code path to the rpm %post.
+    "$PREFIX/bin/openssl-trust-anchors" apply
+fi
+
+#DEBHELPER#

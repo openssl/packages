@@ -1,0 +1,27 @@
+# Test-only OpenSSL configuration: load the FIPS and base providers and make
+# FIPS-approved algorithms the default. Modelled on upstream's
+# test/fips-and-base.cnf, but with alg_section enabled — upstream leaves it
+# commented out "purely for testing purposes", whereas operating in a FIPS
+# approved manner requires it.
+#
+# Used with OPENSSL_CONF_INCLUDE pointing at the directory that holds the
+# fipsinstall-generated fipsmodule.cnf, so no absolute paths are needed here.
+
+config_diagnostics = 1
+openssl_conf = openssl_init
+
+.include fipsmodule.cnf
+
+[openssl_init]
+providers = provider_sect
+alg_section = evp_properties
+
+[evp_properties]
+default_properties = "fips=yes"
+
+[provider_sect]
+fips = fips_sect
+base = base_sect
+
+[base_sect]
+activate = 1

@@ -1,0 +1,14 @@
+[project]
+name = "openssl-packages-tests"
+version = "0.0.0"
+description = "As-installed package tests for openssl-packages (run in target containers)"
+requires-python = ">=3.9"
+dependencies = ["pytest>=8"]
+
+# This repo is packaging sources + tests, not a Python package to build/install.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

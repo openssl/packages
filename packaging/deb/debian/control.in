@@ -1,0 +1,33 @@
+Source: openssl@STREAM@-upstream
+Section: libs
+Priority: optional
+Maintainer: OpenSSL Packages <openssl-packages@openssl.org>
+Build-Depends: debhelper (>= 12~), perl
+Standards-Version: 4.6.2
+Homepage: https://openssl-library.org
+
+Package: openssl@STREAM@-upstream
+Architecture: any
+Multi-Arch: no
+Depends: ${shlibs:Depends}, ${misc:Depends}, ca-certificates
+Description: OpenSSL @STREAM@ upstream build (installed under /opt)
+ Official upstream OpenSSL @STREAM@, built from pristine source with the
+ default feature set and installed under /opt/openssl/@STREAM@ so that it
+ coexists with — and never interferes with — the distribution's own
+ OpenSSL. Configuration lives under /etc/opt/openssl/@STREAM@.
+ .
+ Source this stream's enable script to put it on PATH:
+   source /opt/openssl/@STREAM@/enable
+
+Package: openssl@STREAM@-upstream-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: no
+Depends: openssl@STREAM@-upstream (= ${binary:Version}), ${misc:Depends}
+Description: OpenSSL @STREAM@ upstream build (development files)
+ Headers, pkg-config and CMake files, static libraries, the link-time
+ shared-object symlinks, API/guide man pages and the source demos for
+ OpenSSL @STREAM@ installed under /opt/openssl/@STREAM@.
+ .
+ The guides (ossl-guide-*) reference the demos, which are shipped under
+ /opt/openssl/@STREAM@/share/doc.

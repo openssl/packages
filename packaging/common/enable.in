@@ -1,0 +1,65 @@
+# OpenSSL @STREAM@ (upstream) shell environment.  Source this file:
+#
+#     source @PREFIX@/enable
+#
+# and later revert with:
+#
+#     openssl_upstream_deactivate
+#
+# Sourcing again (or another stream's enable) reverts the current one first, so
+# switching streams never stacks PATH entries. @PREFIX@/@STREAM@ are substituted
+# at package build time. Nounset-safe (${var-}/${var+x}); no LD_LIBRARY_PATH.
+
+# If an upstream stream is already active in this shell, revert it first.
+if [ -n "${OPENSSL_UPSTREAM_ENV-}" ] && command -v openssl_upstream_deactivate >/dev/null 2>&1; then
+    # Defined by a previously sourced enable script, not by this one.
+    # shellcheck disable=SC2218
+    openssl_upstream_deactivate
+fi
+
+# Save the pre-activation environment (distinguishing "unset" from "empty").
+_OU_OLD_PATH="${PATH-}"
+_OU_HAD_PATH="${PATH+x}"
+_OU_OLD_PKG_CONFIG_PATH="${PKG_CONFIG_PATH-}"
+_OU_HAD_PKG_CONFIG_PATH="${PKG_CONFIG_PATH+x}"
+_OU_OLD_MANPATH="${MANPATH-}"
+_OU_HAD_MANPATH="${MANPATH+x}"
+
+# Prepend this stream (a trailing empty element keeps the system defaults after
+# ours for MANPATH/PKG_CONFIG_PATH when they were previously unset).
+PATH="@PREFIX@/bin:${PATH-}"
+export PATH
+PKG_CONFIG_PATH="@PREFIX@/lib64/pkgconfig:${PKG_CONFIG_PATH-}"
+export PKG_CONFIG_PATH
+MANPATH="@PREFIX@/share/man:${MANPATH-}"
+export MANPATH OPENSSL_UPSTREAM_ENV="@PREFIX@"
+
+openssl_upstream_deactivate() {
+    # Restore each variable to exactly what it was (unset if it was unset).
+    if [ -n "${_OU_HAD_PATH-}" ]; then
+        PATH="$_OU_OLD_PATH"
+        export PATH
+    else
+        unset PATH
+    fi
+    if [ -n "${_OU_HAD_PKG_CONFIG_PATH-}" ]; then
+        PKG_CONFIG_PATH="$_OU_OLD_PKG_CONFIG_PATH"
+        export PKG_CONFIG_PATH
+    else
+        unset PKG_CONFIG_PATH
+    fi
+    if [ -n "${_OU_HAD_MANPATH-}" ]; then
+        MANPATH="$_OU_OLD_MANPATH"
+        export MANPATH
+    else
+        unset MANPATH
+    fi
+    unset OPENSSL_UPSTREAM_ENV
+    unset _OU_OLD_PATH _OU_HAD_PATH \
+          _OU_OLD_PKG_CONFIG_PATH _OU_HAD_PKG_CONFIG_PATH \
+          _OU_OLD_MANPATH _OU_HAD_MANPATH
+    unset -f openssl_upstream_deactivate
+}
+
+# Informational message to stderr, so sourcing never pollutes stdout.
+echo "OpenSSL @STREAM@ (upstream) activated; run 'openssl_upstream_deactivate' to revert." >&2

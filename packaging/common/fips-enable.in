@@ -1,0 +1,112 @@
+#!/bin/sh
+# openssl-fips-enable — choose which FIPS provider module OpenSSL @STREAM@ uses,
+# and activate FIPS mode for this stream.
+#
+#   openssl-fips-enable list
+#   openssl-fips-enable <fips-version>    # e.g. 3.1.2
+#   openssl-fips-enable verify
+#   openssl-fips-enable disable
+#
+# Modules are installed per source version under /opt/openssl/fips/<version>/ by
+# the openssl-fips<version>-upstream packages, and are selected by ABSOLUTE PATH
+# in the generated configuration (the config(5) "module" key).
+set -eu
+
+STREAM="@STREAM@"
+PREFIX="@PREFIX@"
+FIPSROOT=/opt/openssl/fips
+SSLDIR="/etc/opt/openssl/@STREAM@"
+OSSL="$PREFIX/bin/openssl"
+CNF_TEMPLATE="$PREFIX/share/openssl-fips.cnf.in"
+ENABLED="$SSLDIR/fips-enabled"
+
+usage() {
+    echo "usage: openssl-fips-enable list | <fips-version> | verify | disable" >&2
+    exit 1
+}
+
+# A module package ships a 'validated' file beside fips.so when that source
+# version holds a NIST CMVP certificate; its content names the certificate.
+# Argument: FIPS module version.
+validation_note() {
+    if [ -r "$FIPSROOT/$1/validated" ]; then
+        printf 'validated, %s' "$(cat "$FIPSROOT/$1/validated")"
+    else
+        printf 'NOT NIST-validated'
+    fi
+}
+
+cmd_list() {
+    echo "OpenSSL stream:   $STREAM"
+    echo "FIPS modules installed:"
+    found=
+    for f in "$FIPSROOT"/*/fips.so; do
+        [ -e "$f" ] || continue
+        found=1
+        v=$(basename "$(dirname "$f")")
+        printf '  %-10s %s\n' "$v" "($(validation_note "$v"))"
+    done
+    [ -n "$found" ] || \
+        echo "  (none — install an openssl-fips<version>-upstream package)"
+    if [ -r "$ENABLED" ]; then
+        echo "Enabled for $STREAM: $(cat "$ENABLED")"
+    else
+        echo "Enabled for $STREAM: none"
+    fi
+}
+
+cmd_enable() {
+    ver="$1"
+    module="$FIPSROOT/$ver/fips.so"
+    [ -x "$OSSL" ]    || { echo "stream $STREAM is not installed" >&2; exit 1; }
+    [ -e "$module" ]  || { echo "FIPS module $ver is not installed" >&2; exit 1; }
+    [ -r "$CNF_TEMPLATE" ] || { echo "missing $CNF_TEMPLATE" >&2; exit 1; }
+
+    # Generate fipsmodule.cnf — this runs the module self-tests on this machine.
+    "$OSSL" fipsinstall -pedantic -provider_name fips \
+        -module "$module" -out "$SSLDIR/fipsmodule.cnf"
+
+    printf 'module = %s\n' "$module" >> "$SSLDIR/fipsmodule.cnf"
+
+    "$OSSL" fipsinstall -provider_name fips \
+        -module "$module" -in "$SSLDIR/fipsmodule.cnf" -verify
+
+    sed -e "s|@SSLDIR@|$SSLDIR|g" -e "s|@FIPS_VERSION@|$ver|g" \
+        "$CNF_TEMPLATE" > "$SSLDIR/openssl.cnf"
+
+    printf '%s\n' "$ver" > "$ENABLED"
+
+    echo "FIPS module $ver enabled for OpenSSL $STREAM."
+    echo "Check with: $OSSL list -providers"
+}
+
+cmd_verify() {
+    [ -r "$ENABLED" ] || { echo "FIPS is not enabled for stream $STREAM" >&2; exit 1; }
+    ver=$(cat "$ENABLED")
+    module="$FIPSROOT/$ver/fips.so"
+    [ -e "$module" ] || {
+        echo "stream $STREAM: enabled module $ver is no longer installed" >&2; exit 1; }
+    if "$OSSL" fipsinstall -provider_name fips \
+           -module "$module" -in "$SSLDIR/fipsmodule.cnf" -verify; then
+        echo "stream $STREAM: fipsmodule.cnf matches FIPS module $ver."
+    else
+        echo "stream $STREAM: STALE fipsmodule.cnf — module $ver changed since it" >&2
+        echo "was enabled. Re-run: openssl-fips-enable $ver" >&2
+        exit 1
+    fi
+}
+
+cmd_disable() {
+    [ -f "$SSLDIR/openssl.cnf.dist" ] && cp "$SSLDIR/openssl.cnf.dist" "$SSLDIR/openssl.cnf"
+    rm -f "$SSLDIR/fipsmodule.cnf" "$ENABLED"
+    echo "FIPS disabled for OpenSSL $STREAM (default configuration restored)."
+}
+
+[ $# -ge 1 ] || usage
+case "$1" in
+    list)    [ $# -eq 1 ] || usage; cmd_list ;;
+    verify)  [ $# -eq 1 ] || usage; cmd_verify ;;
+    disable) [ $# -eq 1 ] || usage; cmd_disable ;;
+    -*)      usage ;;
+    *)       [ $# -eq 1 ] || usage; cmd_enable "$1" ;;
+esac

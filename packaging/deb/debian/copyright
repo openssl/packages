@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: openssl
+Source: https://openssl-library.org/source/
+
+Files: *
+Copyright: OpenSSL Corporation
+License: Apache-2.0
+ Licensed under the Apache License 2.0 (the "License"). You may obtain a
+ copy in the file LICENSE.txt in the source distribution or at
+ https://openssl-library.org/source/license/

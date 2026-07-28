@@ -1,0 +1,8 @@
+opt/openssl/@STREAM@/bin
+opt/openssl/@STREAM@/lib64/lib*.so.*
+opt/openssl/@STREAM@/lib64/ossl-modules
+opt/openssl/@STREAM@/enable
+opt/openssl/@STREAM@/share/openssl-fips.cnf.in
+opt/openssl/@STREAM@/share/man/man1
+opt/openssl/@STREAM@/share/man/man5
+etc/opt/openssl/@STREAM@

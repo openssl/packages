@@ -1,0 +1,25 @@
+# OpenSSL Configure target for our packaged build — a template; @BASE@ and
+# @VARIANT@ are substituted by setup-shlib-variant.sh, which drops the result
+# into a directory pointed at by OPENSSL_LOCAL_CONFIG_DIR. Same format as
+# OpenSSL's own Configurations/*.conf (this file is evaluated as Perl).
+#
+# shlib_variant gives the libraries a distinct SONAME *and* distinct symbol
+# versions (libcrypto@VARIANT@.so.N, OPENSSL_<VARIANT>_x.y), so our build can
+# never be conflated with a distribution's same-major OpenSSL inside one
+# process.
+
+my %targets = (
+    "@BASE@@VARIANT@" => {
+        inherit_from   => [ "@BASE@" ],
+        shlib_variant  => "@VARIANT@",
+
+        # RUNPATH (new dtags, not the legacy RPATH) for the libraries and apps.
+        shared_ldflag  => '-Wl,--enable-new-dtags,-rpath,$(LIBRPATH)',
+        bin_lflags     => '-Wl,--enable-new-dtags,-rpath,$(LIBRPATH)',
+
+        # Provider modules are dlopen'd by an already-loaded libcrypto and need
+        # no RUNPATH. This must be set explicitly: Configure copies
+        # shared_ldflag into module_ldflags whenever the latter is undefined.
+        module_ldflags => "",
+    },
+);

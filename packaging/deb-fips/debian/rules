@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+# FIPS provider module packaging. @FIPSVER@ and @FIPS_CERT@ are substituted at
+# build time. Configured with `enable-fips` and no other OpenSSL options, per
+# the module Security Policy.
+# -march flags — so its bytes match the Security Policy's documented build.
+
+FIPSVER   = @FIPSVER@
+FIPS_CERT = @FIPS_CERT@
+TMP     = $(CURDIR)/debian/tmp
+
+%:
+	dh $@
+
+# Exact build command from the module Security Policy (3.1.2, cert #4985) §11.1,
+# Crypto Officer Guidance / Installation, step 1: `./Configure enable-fips` then
+# `make`. The build environment is left exactly as the packaging tools set it:
+# the Security Policy prescribes a command, not an environment, so altering it
+# would itself be an undocumented deviation. Validation is source-based and the
+# source is unmodified; the integrity MAC is computed over whatever bytes result.
+override_dh_auto_configure:
+	./Configure enable-fips
+
+# dh_auto_build (plain `make`) builds providers/fips.so.
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -Dm755 providers/fips.so $(TMP)/opt/openssl/fips/$(FIPSVER)/fips.so
+	# A 'validated' marker beside the module records the NIST CMVP certificate
+	# for source versions that hold one; openssl-fips-enable reports it. Absent
+	# means this version is not NIST-validated.
+	if [ -n "$(FIPS_CERT)" ]; then \
+	    echo "NIST CMVP certificate #$(FIPS_CERT)" \
+	        > $(TMP)/opt/openssl/fips/$(FIPSVER)/validated; \
+	fi
+
+# Fail the build if anything staged into debian/tmp is not packaged. rpm already
+# behaves this way (%_unpackaged_files_terminate_build defaults to 1), and
+# compat 13 makes --fail-missing the dh_missing default — but the oldest target
+# (Ubuntu 20.04) only has debhelper 12, so ask for it explicitly.
+override_dh_missing:
+	dh_missing --fail-missing
+
+# fips.so is a self-contained plugin: no SONAME to advertise, no ldconfig.
+override_dh_makeshlibs:
+
+override_dh_auto_clean:
+	[ ! -f Makefile ] || $(MAKE) distclean

@@ -1,0 +1,138 @@
+#!/bin/sh
+# openssl-trust-anchors — control whether this OpenSSL stream's own trust store
+# is wired to the distribution's CA trust anchors.
+#
+#   openssl-trust-anchors status
+#   openssl-trust-anchors system   # use the distro CA anchors (default)
+#   openssl-trust-anchors none     # stream-private, initially empty trust store
+#   openssl-trust-anchors apply    # re-apply the recorded policy (used by postinst/%post)
+#
+# Policy precedence:
+#   1. USE_SYSTEM_TRUST_ANCHORS in the environment — this is how you choose at
+#      INSTALL time, identically on both package families:
+#           USE_SYSTEM_TRUST_ANCHORS=no apt install openssl@STREAM@-upstream
+#           USE_SYSTEM_TRUST_ANCHORS=no dnf install openssl@STREAM@-upstream
+#      (the choice is recorded, so upgrades keep it)
+#   2. the recorded choice in /etc/opt/openssl/@STREAM@/trust.conf
+#   3. the default: use the system CA trust anchors
+#
+# With "none", nothing is trusted until you add anchors to
+# /etc/opt/openssl/@STREAM@/certs (then run `openssl rehash` on it) or point
+# applications at their own store via SSL_CERT_FILE / SSL_CERT_DIR.
+set -eu
+
+STREAM="@STREAM@"
+PREFIX="@PREFIX@"
+SSLDIR="/etc/opt/openssl/${STREAM}"
+STREAM_CONF="${SSLDIR}/trust.conf"
+
+# Distro CA bundle / hashed dir, in probe order.
+BUNDLES="/etc/ssl/certs/ca-certificates.crt
+/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+/etc/pki/tls/certs/ca-bundle.crt"
+HASHDIRS="/etc/ssl/certs
+/etc/pki/tls/certs"
+
+normalise() {
+    case "$1" in no|NO|No|false|FALSE|0) echo no ;; *) echo yes ;; esac
+}
+
+read_policy() {
+    USE_SYSTEM_TRUST_ANCHORS=yes
+    # shellcheck source=/dev/null
+    [ -r "$STREAM_CONF" ] && . "$STREAM_CONF" || :
+    case "$(normalise "${USE_SYSTEM_TRUST_ANCHORS:-yes}")" in
+        no) POLICY=none ;;
+        *)  POLICY=system ;;
+    esac
+}
+
+write_policy() {
+    mkdir -p "$SSLDIR"
+    printf '# Written by openssl-trust-anchors.\nUSE_SYSTEM_TRUST_ANCHORS=%s\n' \
+        "$1" > "$STREAM_CONF"
+}
+
+# Administrator-provided real files/dirs are never touched; we only manage our
+# own symlinks.
+apply_system() {
+    if [ -e "$SSLDIR/cert.pem" ] && [ ! -L "$SSLDIR/cert.pem" ]; then
+        echo "keeping administrator-provided $SSLDIR/cert.pem" >&2
+    else
+        for b in $BUNDLES; do
+            [ -e "$b" ] || continue
+            ln -sfn "$b" "$SSLDIR/cert.pem"
+            break
+        done
+    fi
+    if [ -e "$SSLDIR/certs" ] && [ ! -L "$SSLDIR/certs" ]; then
+        echo "keeping administrator-provided $SSLDIR/certs" >&2
+    else
+        for d in $HASHDIRS; do
+            [ -d "$d" ] || continue
+            ln -sfn "$d" "$SSLDIR/certs"
+            break
+        done
+    fi
+}
+
+apply_none() {
+    [ -L "$SSLDIR/cert.pem" ] && rm -f "$SSLDIR/cert.pem" || :
+    [ -L "$SSLDIR/certs" ]    && rm -f "$SSLDIR/certs"    || :
+    [ -d "$SSLDIR/certs" ] || mkdir -p "$SSLDIR/certs"
+}
+
+cmd_apply() {
+    mkdir -p "$SSLDIR"
+    first_install=no
+    [ -e "$STREAM_CONF" ] || first_install=yes
+
+    # An explicit choice in the installing environment wins, and is recorded so
+    # that later upgrades keep it
+    if [ -n "${USE_SYSTEM_TRUST_ANCHORS-}" ]; then
+        write_policy "$(normalise "$USE_SYSTEM_TRUST_ANCHORS")"
+    fi
+
+    read_policy
+    case "$POLICY" in
+        system) apply_system ;;
+        none)   apply_none ;;
+    esac
+
+    # Say what happened once, on first install, so the choice is discoverable.
+    if [ "$first_install" = yes ]; then
+        if [ "$POLICY" = system ]; then
+            echo "OpenSSL $STREAM: using the system CA trust anchors." \
+                 "Opt out with '$PREFIX/bin/openssl-trust-anchors none'." >&2
+        else
+            echo "OpenSSL $STREAM: system CA trust anchors NOT used;" \
+                 "add your own to $SSLDIR/certs." >&2
+        fi
+    fi
+}
+
+cmd_status() {
+    read_policy
+    echo "stream:            $STREAM"
+    echo "system anchors:    $POLICY"
+    for f in cert.pem certs; do
+        if [ -L "$SSLDIR/$f" ]; then
+            echo "$f:$(printf '%*s' $((10 - ${#f})) '')-> $(readlink "$SSLDIR/$f")"
+        elif [ -e "$SSLDIR/$f" ]; then
+            echo "$f: administrator-provided"
+        else
+            echo "$f: absent"
+        fi
+    done
+}
+
+[ $# -ge 1 ] || { echo "usage: openssl-trust-anchors {status|system|none|apply}" >&2; exit 1; }
+case "$1" in
+    apply)  cmd_apply ;;
+    status) cmd_status ;;
+    system) write_policy yes; cmd_apply; echo "OpenSSL $STREAM: using the system CA trust anchors." ;;
+    none)   write_policy no;  cmd_apply
+            echo "OpenSSL $STREAM: system CA trust anchors NOT used."
+            echo "Add anchors to $SSLDIR/certs (then '$PREFIX/bin/openssl rehash $SSLDIR/certs')" ;;
+    *)      echo "usage: openssl-trust-anchors {status|system|none|apply}" >&2; exit 1 ;;
+esac

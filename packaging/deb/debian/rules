@@ -1,0 +1,80 @@
+#!/usr/bin/make -f
+# Packaging rules for openssl<STREAM>-upstream. @STREAM@ is substituted at
+# build time.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_BUILD_OPTIONS ?= parallel=$(shell nproc)
+
+STREAM  = @STREAM@
+PKG     = openssl$(STREAM)-upstream
+PREFIX  = /opt/openssl/$(STREAM)
+SSLDIR  = /etc/opt/openssl/$(STREAM)
+TMP     = $(CURDIR)/debian/tmp
+
+CONF_CFLAGS  = $(shell dpkg-buildflags --get CFLAGS)
+CONF_CPPFLAGS= $(shell dpkg-buildflags --get CPPFLAGS)
+CONF_LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+
+%:
+	dh $@
+
+# Pristine upstream source, default configuration. Only the /opt layout
+# arguments plus the release's own hardened build flags. The synthesised
+# '-upstream' target carries shlib_variant (distinct SONAME + symbol versions)
+# and the RUNPATH flags for libraries and apps.
+override_dh_auto_configure:
+	T=$$(sh setup-shlib-variant.sh -upstream); \
+	OPENSSL_LOCAL_CONFIG_DIR=$(CURDIR)/.openssl-local-config \
+	./Configure "$$T" \
+	    --prefix=$(PREFIX) \
+	    --openssldir=$(SSLDIR) \
+	    --libdir=lib64 \
+	    shared \
+	    $(CONF_CFLAGS) $(CONF_CPPFLAGS) $(CONF_LDFLAGS)
+
+override_dh_auto_build:
+	$(MAKE)
+
+# Upstream's own test suite. Off by default (slow),
+# opt in with RUN_TESTS=1 for release/CI builds.
+override_dh_auto_test:
+ifeq ($(RUN_TESTS),1)
+	$(MAKE) test
+endif
+
+override_dh_auto_install:
+	$(MAKE) DESTDIR=$(TMP) install_sw install_ssldirs install_man_docs
+	install -m 644 enable        $(TMP)$(PREFIX)/enable
+	install -m 755 trust-anchors $(TMP)$(PREFIX)/bin/openssl-trust-anchors
+	install -m 755 fips-enable   $(TMP)$(PREFIX)/bin/openssl-fips-enable
+	install -m 644 -D openssl-fips.cnf.in $(TMP)$(PREFIX)/share/openssl-fips.cnf.in
+	# The trust store is wired by the trust-anchors helper at postinst time;
+	# don't ship an empty certs/ dir..
+	rm -rf $(TMP)$(SSLDIR)/certs
+	mkdir -p $(TMP)$(PREFIX)/share/doc/$(PKG)
+	cp -r demos $(TMP)$(PREFIX)/share/doc/$(PKG)/demos
+	# Embed RUNPATH in pkg-config Libs so consumers resolve our libs at run
+	# time without any global linker config. ${libdir} stays literal for
+	# pkg-config to expand.
+	for pc in $(TMP)$(PREFIX)/lib64/pkgconfig/*.pc; do \
+	    sed -i 's|^Libs: |Libs: -Wl,-rpath,$${libdir} |' $$pc; \
+	done
+
+# Fail the build if anything staged into debian/tmp is not packaged.
+override_dh_missing:
+	dh_missing --fail-missing
+
+# Private /opt libraries.
+override_dh_makeshlibs:
+
+# Resolve our own libs from the staged tree so only external deps (libc) remain.
+# --ignore-missing-info: our libraries are private to this package and we
+# deliberately generate no shlibs for them (see override_dh_makeshlibs), so
+# dpkg-shlibdeps has no package mapping for them. Required since the provider
+# modules lost their RUNPATH (module_ldflags is empty in the variant target),
+# which is what previously let it resolve them.
+override_dh_shlibdeps:
+	dh_shlibdeps -- -l$(TMP)$(PREFIX)/lib64 --ignore-missing-info
+
+override_dh_auto_clean:
+	[ ! -f Makefile ] || $(MAKE) distclean

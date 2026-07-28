@@ -1,0 +1,26 @@
+# OpenSSL configuration activating the FIPS provider.
+# Written by openssl-fips-enable; @SSLDIR@ and @FIPS_VERSION@ are substituted
+# when the stream is configured. Edits here are overwritten on the next
+# `openssl-fips-enable` run; the pristine configuration is kept as
+# openssl.cnf.dist and restored by `openssl-fips-enable disable`.
+#
+# FIPS module @FIPS_VERSION@.
+
+config_diagnostics = 1
+openssl_conf = openssl_init
+
+.include @SSLDIR@/fipsmodule.cnf
+
+[openssl_init]
+providers = provider_sect
+alg_section = algorithm_sect
+
+[provider_sect]
+fips = fips_sect
+base = base_sect
+
+[base_sect]
+activate = 1
+
+[algorithm_sect]
+default_properties = fips=yes

@@ -1,0 +1,8 @@
+opt/openssl/@STREAM@/include
+opt/openssl/@STREAM@/lib64/lib*.so
+opt/openssl/@STREAM@/lib64/lib*.a
+opt/openssl/@STREAM@/lib64/pkgconfig
+opt/openssl/@STREAM@/lib64/cmake
+opt/openssl/@STREAM@/share/man/man3
+opt/openssl/@STREAM@/share/man/man7
+opt/openssl/@STREAM@/share/doc

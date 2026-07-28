@@ -1,0 +1,10 @@
+# Built packages.
+/output/
+
+# Build stamps used for incremental rebuilds.
+/.stamps/
+
+# Test environment managed by uv, and pytest state.
+/.venv/
+/.pytest_cache/
+__pycache__/
