@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_openssl_tests:
+        description: "Also run OpenSSL's own test suite during each build"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  RUN_TESTS: ${{ inputs.run_openssl_tests && '1' || '0' }}
+
+jobs:
+  lint:
+    name: shellcheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - run: make lint
+
+  targets:
+    name: discover targets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: list
+        run: |
+          targets=$(make -s ci-targets | jq -R . | jq -cs .)
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+          echo "$targets"
+
+  build:
+    name: ${{ matrix.target }} (${{ matrix.arch }})
+    needs: targets
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        target: ${{ fromJSON(needs.targets.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build
+        run: make ARCH=${{ matrix.arch }} ${{ matrix.target }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.arch }}-${{ matrix.target }}
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
+
+  build-fips:
+    name: fips ${{ matrix.family }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        family: [deb, rpm]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build
+        run: make ARCH=${{ matrix.arch }} fips-${{ matrix.family }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.arch }}-fips-${{ matrix.family }}
+          path: output/
+          if-no-files-found: error
+          retention-days: 7
+
+  test:
+    name: package tests (${{ matrix.arch }})
+    needs: [build, build-fips]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: packages-${{ matrix.arch }}-*
+          merge-multiple: true
+          path: output/
+      - name: Show what will be tested
+        run: find output -name '*.deb' -o -name '*.ddeb' -o -name '*.rpm' | sort
+      - uses: astral-sh/setup-uv@v9
+      - name: Run the package test suite
+        env:
+          REQUIRE_ALL_TARGETS: "1"
+        run: make ARCH=${{ matrix.arch }} test
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-results-${{ matrix.arch }}
+          path: output/tests.xml
+          if-no-files-found: warn
+          retention-days: 7

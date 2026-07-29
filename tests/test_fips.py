@@ -31,8 +31,10 @@ def _fips_dir(fam):
 def _fips_pkgs_present(fam):
     d = _fips_dir(fam)
     if fam == "deb":
-        return bool(glob.glob(os.path.join(d, f"openssl-fips{FIPS_VERSION}-upstream_*.deb")))
-    return bool(glob.glob(os.path.join(d, f"openssl-fips{FIPS_VERSION}-upstream-*.rpm")))
+        return bool(glob.glob(os.path.join(
+            d, f"openssl-fips{FIPS_VERSION}-upstream_*_{DEB_ARCH}.deb")))
+    return bool(glob.glob(os.path.join(
+        d, f"openssl-fips{FIPS_VERSION}-upstream-*.{RPM_ARCH}.rpm")))
 
 
 def _fips_install_script(fam):

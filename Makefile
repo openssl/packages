@@ -58,7 +58,7 @@ DEB_TARGETS = $(addprefix deb-,$(DEB_SUITES))
 RPM_TARGETS = $(addprefix rpm-el,$(EL_VERS))
 
 .DEFAULT_GOAL := help
-.PHONY: all deb rpm fips fips-deb fips-rpm test lint clean help $(DEB_TARGETS) $(RPM_TARGETS)
+.PHONY: all deb rpm fips fips-deb fips-rpm test lint clean help ci-targets $(DEB_TARGETS) $(RPM_TARGETS)
 
 all: deb rpm
 deb: $(DEB_TARGETS)
@@ -99,6 +99,10 @@ SHELL_SRCS = $(shell git ls-files '*.sh' 2>/dev/null || find build packaging -na
 lint:
 	podman run --rm -v "$(CURDIR)":/mnt:ro -w /mnt docker.io/koalaman/shellcheck:stable \
 	    --shell=bash --external-sources $(SHELL_SRCS)
+
+# One target name per line, for CI to build its job matrix from.
+ci-targets:
+	@printf '%s\n' $(DEB_TARGETS) $(RPM_TARGETS)
 
 clean:
 	rm -rf output $(STAMPDIR)
