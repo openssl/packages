@@ -31,7 +31,7 @@ export RUN_TESTS
 
 # Tests run via uv (pytest + env from pyproject.toml).
 PYTEST      ?= uv run pytest
-PYTEST_ARGS ?=
+PYTEST_ARGS ?= -v
 
 # FIPS provider modules, one package per source version, installed at
 # /opt/openssl/fips/<version>/. Built distro-independently (enable-fips only).
