@@ -83,7 +83,11 @@ make test
 %endif
 
 %install
-%make_install DESTDIR=%{buildroot} install_sw install_ssldirs install_man_docs
+# Explicit make, NOT %%make_install: that macro is `make install ...`, and the
+# bare `install` target drags in install_docs -> install_html_docs, building and
+# staging the whole HTML manual we do not ship. The deb rules call the same
+# three targets explicitly.
+make DESTDIR=%{buildroot} install_sw install_ssldirs install_man_docs
 
 # Per-stream enable/deactivate script (interactive convenience).
 sed -e 's|@PREFIX@|%{prefix}|g' -e 's|@STREAM@|%{stream}|g' \
