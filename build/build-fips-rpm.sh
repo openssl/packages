@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Build the FIPS module + helper .rpms. The fips.so is distro-independent
-# (enable-fips only, links just libc); el9 is the default builder.
+# Build the FIPS module .rpms. One build serves every EL release, so the builder
+# must be the OLDEST glibc we target — el9 (2.34) — because the module inherits a
+# glibc symbol-version floor from its builder and glibc is compatible only
+# forwards. Building on el10 (2.39) would leave the package uninstallable on el9.
 #
 #   build/build-fips-rpm.sh [FIPSVER] [EL] [IMAGE]
 set -euo pipefail

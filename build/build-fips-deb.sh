@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Build the FIPS module + helper .debs. The fips.so is distro-independent
-# (built with enable-fips only, links just libc), so one deb build serves all
-# deb releases; bookworm is the default builder.
+# Build the FIPS module .debs. The fips.so links only libc, so one build serves
+# every deb release — but it inherits a glibc symbol-version floor from whatever
+# built it, and glibc is compatible only forwards. The builder must therefore be
+# the OLDEST glibc we target: bullseye and focal are both 2.31, and a module
+# built on bookworm (2.36) needs GLIBC_2.34 and will not install on either.
 #
 #   build/build-fips-deb.sh [FIPSVER] [SUITE] [IMAGE]
 set -euo pipefail
 
 FIPSVER="${1:-3.1.2}"
-SUITE="${2:-bookworm}"
+SUITE="${2:-bullseye}"
 IMAGE="${3:-debian:$SUITE}"
 ARCH="${ARCH:-amd64}"
 

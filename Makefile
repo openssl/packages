@@ -44,6 +44,14 @@ CERT_3.1.2     = 4985
 FIPS_VERSION ?= 3.1.2
 export FIPS_VERSION
 
+# One module build serves a whole family, so it must be built on the release with
+# the OLDEST glibc in that family: the module links libc.so.6 and picks up a
+# symbol-version floor from its builder, and glibc is only compatible forwards.
+# Built on bookworm it required GLIBC_2.34 and would not install on bullseye or
+# focal (both 2.31). el9 is already the oldest EL we target.
+FIPS_DEB_SUITE ?= bullseye
+FIPS_EL_VER    ?= 9
+
 DEB_SUITES = bullseye bookworm trixie focal jammy noble resolute
 EL_VERS    = 9 10
 
@@ -75,9 +83,11 @@ rpm: $(RPM_TARGETS)
 fips: fips-deb fips-rpm
 
 fips-deb:
-	$(foreach v,$(FIPS_VERSIONS),FIPS_CERT="$(CERT_$(v))" build/build-fips-deb.sh $(v) &&) true
+	$(foreach v,$(FIPS_VERSIONS),FIPS_CERT="$(CERT_$(v))" build/build-fips-deb.sh $(v) \
+	    $(FIPS_DEB_SUITE) $(IMAGE_$(FIPS_DEB_SUITE)) &&) true
 fips-rpm:
-	$(foreach v,$(FIPS_VERSIONS),FIPS_CERT="$(CERT_$(v))" build/build-fips-rpm.sh $(v) &&) true
+	$(foreach v,$(FIPS_VERSIONS),FIPS_CERT="$(CERT_$(v))" build/build-fips-rpm.sh $(v) \
+	    $(FIPS_EL_VER) &&) true
 
 test:
 	@mkdir -p output
