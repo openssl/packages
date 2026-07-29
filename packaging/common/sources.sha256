@@ -1,0 +1,16 @@
+# Pinned SHA-256 of every upstream source tarball we build, in sha256sum(1)
+# format. verify-source.sh refuses to build a version that is not listed here.
+#
+# The pin is what makes a build reproducible and what protects us if an upstream
+# artifact is ever replaced in place; the detached signature checked alongside it
+# is what establishes authenticity. Record a new pin only after verifying the
+# tarball's signature, so the value inherits that authority instead of recording
+# whatever the download server happened to serve.
+#
+#   curl -fsSLO https://github.com/openssl/openssl/releases/download/openssl-<V>/openssl-<V>.tar.gz
+#   curl -fsSLO https://github.com/openssl/openssl/releases/download/openssl-<V>/openssl-<V>.tar.gz.asc
+#   gpg --no-default-keyring --keyring ./ring.gpg --import openssl-release-keys.asc
+#   gpg --no-default-keyring --keyring ./ring.gpg --verify openssl-<V>.tar.gz.asc openssl-<V>.tar.gz
+#   sha256sum openssl-<V>.tar.gz
+2db3f3a0d6ea4b59e1f094ace2c8cd536dffb87cdc39084c5afa1e6f7f37dd09  openssl-4.0.1.tar.gz
+a0ce69b8b97ea6a35b96875235aa453b966ba3cba8af2de23657d8b6767d6539  openssl-3.1.2.tar.gz

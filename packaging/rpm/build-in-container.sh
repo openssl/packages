@@ -10,7 +10,7 @@ OUT=/out
 
 echo ">> build openssl${STREAM}-upstream ${VERSION} (rpm)"
 dnf -y install --setopt=install_weak_deps=False \
-    rpm-build redhat-rpm-config gcc make wget ca-certificates \
+    rpm-build redhat-rpm-config gcc make wget ca-certificates gnupg2 \
     perl-interpreter perl-core 'perl(FindBin)' 'perl(IPC::Cmd)' \
     'perl(Pod::Html)' 'perl(Pod::Man)' >/dev/null
 
@@ -21,6 +21,9 @@ tarball="openssl-${VERSION}.tar.gz"
 url="https://github.com/openssl/openssl/releases/download/openssl-${VERSION}/${tarball}"
 echo ">> fetch $url"
 wget -q "$url" -O "$topdir/SOURCES/$tarball"
+wget -q "$url.asc" -O "$topdir/SOURCES/$tarball.asc"
+sh "$SRCREPO/packaging/common/verify-source.sh" \
+    "$topdir/SOURCES/$tarball" "$topdir/SOURCES/$tarball.asc"
 
 cp "$SRCREPO/packaging/rpm/openssl-upstream.spec" "$topdir/SPECS/"
 cp "$SRCREPO/packaging/common/setup-shlib-variant.sh" "$topdir/SOURCES/"

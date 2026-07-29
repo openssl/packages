@@ -13,12 +13,14 @@ echo ">> build openssl-fips${FIPSVER}-upstream on ${CODENAME}"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-    build-essential debhelper perl wget ca-certificates file xz-utils >/dev/null
+    build-essential debhelper perl wget ca-certificates gnupg file xz-utils >/dev/null
 
 mkdir -p "$WORK" "$OUT"
 cd "$WORK"
 tarball="openssl-${FIPSVER}.tar.gz"
-wget -q "https://github.com/openssl/openssl/releases/download/openssl-${FIPSVER}/${tarball}"
+url="https://github.com/openssl/openssl/releases/download/openssl-${FIPSVER}/${tarball}"
+wget -q "$url" "$url.asc"
+sh "$SRCREPO/packaging/common/verify-source.sh" "$tarball" "$tarball.asc"
 tar xf "$tarball"
 cd "openssl-${FIPSVER}"
 

@@ -8,14 +8,18 @@ OUT=/out
 
 echo ">> build openssl-fips${FIPSVER}-upstream (rpm)"
 dnf -y install --setopt=install_weak_deps=False \
-    rpm-build redhat-rpm-config gcc make wget ca-certificates \
+    rpm-build redhat-rpm-config gcc make wget ca-certificates gnupg2 \
     perl-interpreter perl-core 'perl(FindBin)' 'perl(IPC::Cmd)' >/dev/null
 
 topdir="$(rpm --eval '%{_topdir}')"
 mkdir -p "$topdir"/{SOURCES,SPECS,RPMS,BUILD,BUILDROOT} "$OUT"
 
-wget -q "https://github.com/openssl/openssl/releases/download/openssl-${FIPSVER}/openssl-${FIPSVER}.tar.gz" \
-    -O "$topdir/SOURCES/openssl-${FIPSVER}.tar.gz"
+tarball="openssl-${FIPSVER}.tar.gz"
+url="https://github.com/openssl/openssl/releases/download/openssl-${FIPSVER}/${tarball}"
+wget -q "$url" -O "$topdir/SOURCES/$tarball"
+wget -q "$url.asc" -O "$topdir/SOURCES/$tarball.asc"
+sh "$SRCREPO/packaging/common/verify-source.sh" \
+    "$topdir/SOURCES/$tarball" "$topdir/SOURCES/$tarball.asc"
 
 cp "$SRCREPO/packaging/rpm-fips/openssl-fips-upstream.spec" "$topdir/SPECS/"
 

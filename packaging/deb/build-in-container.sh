@@ -14,14 +14,15 @@ echo ">> build openssl${STREAM}-upstream ${VERSION} on ${CODENAME}"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-    build-essential debhelper perl wget ca-certificates file xz-utils >/dev/null
+    build-essential debhelper perl wget ca-certificates gnupg file xz-utils >/dev/null
 
 mkdir -p "$WORK" "$OUT"
 cd "$WORK"
 tarball="openssl-${VERSION}.tar.gz"
 url="https://github.com/openssl/openssl/releases/download/openssl-${VERSION}/${tarball}"
 echo ">> fetch $url"
-wget -q "$url"
+wget -q "$url" "$url.asc"
+sh "$SRCREPO/packaging/common/verify-source.sh" "$tarball" "$tarball.asc"
 tar xf "$tarball"
 cd "openssl-${VERSION}"
 
