@@ -20,7 +20,9 @@ receives patch updates within its release stream.
   library search path, and the system `libcrypto`/`libssl`, the programs that
   depend on them, and the system trust configuration are untouched.
 - Multiple release streams installed side by side, for example 4.0 and 4.1.
-- FIPS provider modules as separate packages, one per OpenSSL source version.
+- FIPS provider modules as separate packages: pinned packages for
+  NIST-validated source versions, and a per-stream companion module that
+  upgrades with its stream.
 - Development files, documentation, man pages and debug symbols.
 
 ## Supported distributions
@@ -85,10 +87,13 @@ never the patch version, so references to it survive updates.
 
 ### FIPS provider modules
 
-Named for the full source version the module was built from, `MAJOR.MINOR.PATCH`,
-because a FIPS module is tied to an exact source version rather than to a stream.
-Modules are independent of any installed release and several can be installed
-together.
+Two kinds of module package, with different lifecycles.
+
+**Validated modules** are named for the full source version they were built
+from, `MAJOR.MINOR.PATCH`, because a NIST CMVP certificate is tied to an exact
+source version. These packages are pinned: they never move to a different
+source release, so what was validated is what stays installed. Several can be
+installed together, independently of any stream.
 
 | Package | Contents |
 | ------- | -------- |
@@ -100,9 +105,24 @@ openssl-fips3.1.2-upstream_3.1.2-1_amd64.deb        Debian, Ubuntu
 openssl-fips3.1.2-upstream-3.1.2-1.el9.x86_64.rpm   Enterprise Linux
 ```
 
-Whether a version holds a NIST CMVP certificate is reported by
-`openssl-fips-enable list`, not encoded in the name: a version can gain a
-certificate after packages for it already exist.
+**The stream companion module** is named for its stream, like every other
+stream package, and upgrades in step with it — it is built from the same
+source release as the stream's packages and is **not** NIST-validated. It is
+useful for developing and testing FIPS-mode behaviour against current code
+without freezing on old module versions.
+
+| Package | Contents |
+| ------- | -------- |
+| `openssl<MAJOR>.<MINOR>-upstream-fips` | the provider module, under `/opt/openssl/fips/<MAJOR>.<MINOR>` |
+
+```
+openssl4.0-upstream-fips_4.0.1-1_amd64.deb          Debian, Ubuntu
+openssl4.0-upstream-fips-4.0.1-1.el9.x86_64.rpm     Enterprise Linux
+```
+
+`openssl-fips-enable list` reports each installed module's status: the
+certificate number for a validated module, the actual source version for the
+stream companion.
 
 ## Using an installed stream
 
@@ -165,24 +185,30 @@ with `SSL_CERT_FILE` / `SSL_CERT_DIR`.
 
 ### Enabling a FIPS provider module
 
-FIPS provider modules are packaged one per OpenSSL source version and install
-under `/opt/openssl/fips/<version>`, independently of any stream, so one module
-can serve any installed stream and several modules can be installed together.
+Modules install under `/opt/openssl/fips/`, independently of any stream, so one
+module can serve any installed stream and several modules can be installed
+together: validated modules under their full version, the stream companion
+under its stream label.
 
 Activation is an explicit administrative step, because the module's self-tests
 must run on the machine that will use it:
 
 ```sh
 openssl-fips-enable list         # installed modules and their validation status
-openssl-fips-enable 3.1.2        # activate a module for this stream
+openssl-fips-enable 3.1.2        # activate a validated module for this stream
+openssl-fips-enable 4.0          # or the 4.0 stream's companion module
 openssl-fips-enable verify       # confirm the configuration still matches the module
 openssl-fips-enable disable
 ```
 
-`list` reports whether a module version holds a NIST CMVP certificate. A module
-without one still restricts operations to approved algorithms, which is useful
-for development and testing, but it does not make an installation FIPS 140-3
-compliant.
+A module without a NIST CMVP certificate still restricts operations to approved
+algorithms, which is useful for development and testing, but it does not make
+an installation FIPS 140-3 compliant.
+
+When the stream companion module is upgraded along with its stream, it is
+re-activated automatically for any stream that has it enabled, so its integrity
+checksum keeps matching the installed bytes. Validated modules never change, so
+they are never re-activated behind your back.
 
 ## How the packages are built
 
