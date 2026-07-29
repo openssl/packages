@@ -37,9 +37,14 @@ MULTI_TARGET = ("deb", "bookworm", "debian:12")
 # report itself as not validated.
 CERTIFICATES = {"3.1.2": "4985"}
 
+# The stream companion module: openssl<STREAM>-upstream-fips, installed at
+# /opt/openssl/fips/<STREAM>/, NOT validated, upgrades with the stream. Its
+# enable argument is the stream label, unlike a validated module's full version.
+COMPANION = STREAM
+
 
 def built_fips_versions():
-    """Every FIPS module version with packages in output/, oldest first."""
+    """Every VALIDATED module version with packages in output/, oldest first."""
     found = set()
     for d in glob.glob(os.path.join(REPO, "output", "openssl-fips*-upstream")):
         m = re.fullmatch(r"openssl-fips(\d+\.\d+\.\d+)-upstream", os.path.basename(d))
@@ -62,25 +67,49 @@ def _fips_pkgs_present(fam, version=FIPS_VERSION):
         d, f"openssl-fips{version}-upstream-*.{RPM_ARCH}.rpm")))
 
 
-def _fips_install_script(fam):
-    # binutils supplies readelf, for the module's ELF properties.
+def _companion_dir(fam):
+    return os.path.join(REPO, "output", f"openssl{STREAM}-upstream-fips",
+                        "deb" if fam == "deb" else "rpm")
+
+
+def _companion_pkg_glob(fam):
+    if fam == "deb":
+        return os.path.join(_companion_dir(fam),
+                            f"openssl{STREAM}-upstream-fips_*_{DEB_ARCH}.deb")
+    return os.path.join(_companion_dir(fam),
+                        f"openssl{STREAM}-upstream-fips-[0-9]*.{RPM_ARCH}.rpm")
+
+
+def _companion_pkgs_present(fam):
+    return bool(glob.glob(_companion_pkg_glob(fam)))
+
+
+def _fips_install_script(fam, with_companion):
+    # binutils supplies readelf, for the module's ELF properties. The companion
+    # package rides along when built, proving its installability (glibc floor)
+    # on every release exactly like the validated module's.
+    companion_deb = f"/fips-companion/openssl{STREAM}-upstream-fips_*_{DEB_ARCH}.deb"
+    companion_rpm = f"/fips-companion/openssl{STREAM}-upstream-fips-[0-9]*.{RPM_ARCH}.rpm"
     if fam == "deb":
         return (
             "set -e; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null; "
             "apt-get install -y --no-install-recommends binutils "
             f"/pkgs/openssl{STREAM}-upstream_*_{DEB_ARCH}.deb "
-            f"/fips/openssl-fips{FIPS_VERSION}-upstream_*_{DEB_ARCH}.deb >/dev/null 2>&1"
+            f"/fips/openssl-fips{FIPS_VERSION}-upstream_*_{DEB_ARCH}.deb "
+            + (companion_deb if with_companion else "") + " >/dev/null 2>&1"
         )
     return (
         "set -e; dnf install -y -q binutils "
         f"/pkgs/openssl{STREAM}-upstream-*.{RPM_ARCH}.rpm "
-        f"/fips/openssl-fips{FIPS_VERSION}-upstream-*.{RPM_ARCH}.rpm >/dev/null 2>&1"
+        f"/fips/openssl-fips{FIPS_VERSION}-upstream-*.{RPM_ARCH}.rpm "
+        + (companion_rpm if with_companion else "") + " >/dev/null 2>&1"
     )
 
 
 class FipsTarget:
-    def __init__(self, family, cid):
+    def __init__(self, family, cid, companion_installed=False):
         self.family, self.cid = family, cid
+        self.companion_installed = companion_installed
         self.stream = STREAM
         self.prefix = f"/opt/openssl/{STREAM}"
         self.ossl = f"{self.prefix}/bin/openssl"
@@ -106,19 +135,17 @@ def fips_target(request):
         pytest.skip(f"FIPS {FIPS_VERSION} packages for {fam} not built")
     if not glob.glob(os.path.join(pkgdir(fam, rel), f"openssl{STREAM}-upstream*")):
         pytest.skip(f"stream {STREAM} packages for {fam}/{rel} not built")
-    fipsdir = _fips_dir(fam)
-    datadir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-    cid = subprocess.run(
-        [PODMAN, "run", "-d", "--platform", f"linux/{ARCH}",
-         "-v", f"{pkgdir(fam, rel)}:/pkgs:ro", "-v", f"{fipsdir}:/fips:ro",
-         "-v", f"{datadir}:/testdata:ro",
-         image, "sleep", "infinity"],
-        capture_output=True, text=True, check=True).stdout.strip()
+    with_companion = _companion_pkgs_present(fam)
+    mounts = {pkgdir(fam, rel): "/pkgs", _fips_dir(fam): "/fips", DATADIR: "/testdata"}
+    if with_companion:
+        mounts[_companion_dir(fam)] = "/fips-companion"
+    cid = start_container(image, mounts)
     try:
-        inst = subprocess.run([PODMAN, "exec", cid, "bash", "-c", _fips_install_script(fam)],
+        script = _fips_install_script(fam, with_companion)
+        inst = subprocess.run([PODMAN, "exec", cid, "bash", "-c", script],
                               capture_output=True, text=True)
         assert inst.returncode == 0, f"install failed:\n{inst.stdout}\n{inst.stderr}"
-        yield FipsTarget(fam, cid)
+        yield FipsTarget(fam, cid, companion_installed=with_companion)
     finally:
         subprocess.run([PODMAN, "rm", "-f", cid], capture_output=True)
 
@@ -137,6 +164,38 @@ def test_helper_list_reports_validation_status(fips_target):
     # 3.1.2 ships a 'validated' marker naming its CMVP certificate.
     if FIPS_VERSION == "3.1.2":
         assert "validated" in out and "4985" in out, out
+
+
+def test_companion_module_installed_and_activates(fips_target):
+    """The stream companion module: named after the stream, installed at a
+    stream-stable path, reporting its real source version, activating and
+    enforcing approved-only crypto on every release — the same installability
+    claim (glibc floor included) the validated module makes."""
+    t = fips_target
+    if not t.companion_installed:
+        pytest.skip(f"companion module for stream {STREAM} not built")
+
+    assert t.run(f"test -e /opt/openssl/fips/{COMPANION}/fips.so").returncode == 0
+    # named after the stream, owned by the stream-named package
+    pkg = f"openssl{STREAM}-upstream-fips"
+    if t.family == "deb":
+        owner = t.out(f"dpkg -S /opt/openssl/fips/{COMPANION}/fips.so")
+        assert owner.startswith(pkg + ":"), owner
+    else:
+        assert t.out(f"rpm -qf /opt/openssl/fips/{COMPANION}/fips.so").startswith(pkg)
+    # the version file records the actual source version and list reports it
+    version = t.out(f"cat /opt/openssl/fips/{COMPANION}/version")
+    assert version.startswith(STREAM + "."), version
+    line = [l for l in t.out(f"{t.helper} list").splitlines()
+            if l.strip().startswith(COMPANION + " ")]
+    assert line and version in line[0] and "NOT NIST-validated" in line[0], line
+
+    r = t.run(f"{t.helper} {COMPANION}")
+    assert r.returncode == 0, f"enabling the companion failed:\n{r.stdout}\n{r.stderr}"
+    assert "fips" in t.out(f"{t.ossl} list -providers")
+    assert t.run(f"printf abc | {t.ossl} dgst -md5").returncode != 0, \
+        "md5 must be blocked with the companion module active"
+    t.run(f"{t.helper} disable", check=True)
 
 
 def test_enable_and_provider_loads(fips_target):
@@ -279,18 +338,32 @@ def test_module_carries_the_distribution_link_flags(fips_target):
     assert "BIND_NOW" in dyn, f"the module did not get the distribution LDFLAGS:\n{dyn}"
 
 
-# ---- several module versions installed at once ------------------------------
+# ---- several modules installed at once ---------------------------------------
 
-MULTI_VERSIONS = built_fips_versions()
+# Module identifiers as the helper takes them: full versions for validated
+# modules, the stream label for the companion.
+MULTI_MODULES = built_fips_versions() + [COMPANION]
 
 
-def _multi_install_script(fam, versions):
-    specs = []
-    for v in versions:
-        sub = "deb" if fam == "deb" else "rpm"
-        specs.append(f"/output/openssl-fips{v}-upstream/{sub}/openssl-fips{v}-upstream"
-                     + (f"_*_{DEB_ARCH}.deb" if fam == "deb"
-                        else f"-[0-9]*.{RPM_ARCH}.rpm"))
+def _module_pkg_spec(fam, module):
+    """Package glob for a module id, as a path under the /output mount."""
+    sub = "deb" if fam == "deb" else "rpm"
+    if module == COMPANION:
+        pkg = f"openssl{STREAM}-upstream-fips"
+    else:
+        pkg = f"openssl-fips{module}-upstream"
+    suffix = f"_*_{DEB_ARCH}.deb" if fam == "deb" else f"-[0-9]*.{RPM_ARCH}.rpm"
+    return f"/output/{pkg}/{sub}/{pkg}{suffix}"
+
+
+def _module_pkgs_present(fam, module):
+    if module == COMPANION:
+        return _companion_pkgs_present(fam)
+    return _fips_pkgs_present(fam, module)
+
+
+def _multi_install_script(fam, modules):
+    specs = [_module_pkg_spec(fam, m) for m in modules]
     if fam == "deb":
         return ("set -e; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null; "
                 "apt-get install -y --no-install-recommends binutils "
@@ -302,12 +375,12 @@ def _multi_install_script(fam, versions):
 
 
 def _multi_container():
-    if len(MULTI_VERSIONS) < 2:
-        pytest.skip("need two FIPS module versions built (e.g. make fips-deb fips-rpm)")
+    if len(MULTI_MODULES) < 2:
+        pytest.skip("need two FIPS modules built (e.g. make fips-deb fips-rpm)")
     fam, rel, image = MULTI_TARGET
-    for v in MULTI_VERSIONS:
-        if not _fips_pkgs_present(fam, v):
-            pytest.skip(f"FIPS {v} packages for {fam} not built")
+    for m in MULTI_MODULES:
+        if not _module_pkgs_present(fam, m):
+            pytest.skip(f"FIPS module {m} packages for {fam} not built")
     if not glob.glob(os.path.join(pkgdir(fam, rel), f"openssl{STREAM}-upstream*")):
         pytest.skip(f"stream {STREAM} packages for {fam}/{rel} not built")
 
@@ -315,11 +388,11 @@ def _multi_container():
                                  os.path.join(REPO, "output"): "/output",
                                  DATADIR: "/testdata"})
     try:
-        script = _multi_install_script(fam, MULTI_VERSIONS)
+        script = _multi_install_script(fam, MULTI_MODULES)
         r = subprocess.run([PODMAN, "exec", cid, "bash", "-c", script],
                            capture_output=True, text=True)
         assert r.returncode == 0, f"installing several modules failed:\n{r.stdout}\n{r.stderr}"
-        yield FipsTarget(fam, cid)
+        yield FipsTarget(fam, cid, companion_installed=True)
     finally:
         subprocess.run([PODMAN, "rm", "-f", cid], capture_output=True)
 
@@ -336,50 +409,52 @@ def fips_multi_fresh():
 
 
 def test_modules_coexist_and_report_their_validation_status(fips_multi):
-    """Several source versions install side by side under /opt/openssl/fips/, and
-    `list` distinguishes the NIST-validated ones from the rest — the distinction
-    a user has to be able to see before choosing."""
+    """Validated modules and the stream companion install side by side under
+    /opt/openssl/fips/, and `list` distinguishes them — the distinction a user
+    has to be able to see before choosing."""
     t = fips_multi
     out = t.out(f"{t.helper} list")
-    for v in MULTI_VERSIONS:
-        assert v in out, f"{v} missing from list output:\n{out}"
-        assert t.run(f"test -e /opt/openssl/fips/{v}/fips.so").returncode == 0
+    for m in MULTI_MODULES:
+        assert m in out, f"{m} missing from list output:\n{out}"
+        assert t.run(f"test -e /opt/openssl/fips/{m}/fips.so").returncode == 0
 
     for line in out.splitlines():
-        for v in MULTI_VERSIONS:
-            if line.strip().startswith(v):
-                if v in CERTIFICATES:
-                    assert "validated," in line and CERTIFICATES[v] in line, line
+        for m in MULTI_MODULES:
+            if line.strip().startswith(m + " "):
+                if m in CERTIFICATES:
+                    assert "validated," in line and CERTIFICATES[m] in line, line
+                elif m == COMPANION:
+                    assert "tracks" in line and "NOT NIST-validated" in line, line
                 else:
                     assert "NOT NIST-validated" in line, line
 
 
-@pytest.mark.parametrize("version", MULTI_VERSIONS or [FIPS_VERSION])
-def test_each_module_can_be_activated(fips_multi, version):
+@pytest.mark.parametrize("module", MULTI_MODULES)
+def test_each_module_can_be_activated(fips_multi, module):
     """Every installed module must activate for this stream and enforce
     approved-only crypto — including a module from a different major than the
     libcrypto loading it."""
     t = fips_multi
-    r = t.run(f"{t.helper} {version}")
-    assert r.returncode == 0, f"enabling {version} failed:\n{r.stdout}\n{r.stderr}"
+    r = t.run(f"{t.helper} {module}")
+    assert r.returncode == 0, f"enabling {module} failed:\n{r.stdout}\n{r.stderr}"
 
     providers = t.run(f"{t.ossl} list -providers")
     assert "fips" in providers.stdout, providers.stdout + providers.stderr
     cnf = t.out(f"cat /etc/opt/openssl/{t.stream}/fipsmodule.cnf")
-    assert f"/opt/openssl/fips/{version}/fips.so" in cnf, cnf
-    assert t.out(f"cat /etc/opt/openssl/{t.stream}/fips-enabled") == version
+    assert f"/opt/openssl/fips/{module}/fips.so" in cnf, cnf
+    assert t.out(f"cat /etc/opt/openssl/{t.stream}/fips-enabled") == module
 
     assert t.run(f"printf abc | {t.ossl} dgst -sha256").returncode == 0
     assert t.run(f"printf abc | {t.ossl} dgst -md5").returncode != 0, \
-        f"md5 must be blocked with module {version} active"
+        f"md5 must be blocked with module {module} active"
     assert t.run(f"{t.helper} verify").returncode == 0
 
 
 def test_switching_modules_rewrites_the_configuration(fips_multi):
-    """Switching leaves no trace of the previous module: the recorded version, the
+    """Switching leaves no trace of the previous module: the recorded module, the
     configuration and the MAC all move together, so `verify` stays truthful."""
     t = fips_multi
-    first, second = MULTI_VERSIONS[0], MULTI_VERSIONS[-1]
+    first, second = MULTI_MODULES[0], MULTI_MODULES[-1]
 
     t.run(f"{t.helper} {first}", check=True)
     t.run(f"{t.helper} {second}", check=True)
@@ -393,9 +468,40 @@ def test_switching_modules_rewrites_the_configuration(fips_multi):
     assert f"Enabled for {t.stream}: {second}" in t.out(f"{t.helper} list")
 
 
+def test_companion_reinstall_reactivates_it(fips_multi_fresh):
+    """The companion upgrades with the stream, which replaces module bytes under
+    an enabled configuration. The package's postinst must re-run the activation
+    (self-tests and a fresh MAC) so the provider keeps loading — silently
+    breaking FIPS on `apt upgrade` is not acceptable. Reinstalling exercises the
+    same maintainer-script path as an upgrade."""
+    t = fips_multi_fresh
+    t.run(f"{t.helper} {COMPANION}", check=True)
+    # Wreck the recorded module MAC to prove the reinstall is what repairs it.
+    # It has to be the module-mac value: the MAC is computed over fips.so and
+    # only recorded in the cnf, so appended garbage would be ignored.
+    t.run(f"sed -i 's/^module-mac.*/module-mac = 00:00/' "
+          f"/etc/opt/openssl/{t.stream}/fipsmodule.cnf", check=True)
+    assert t.run(f"{t.helper} verify").returncode != 0, \
+        "the MAC should be broken before the reinstall"
+
+    if t.family == "deb":
+        r = t.run(f"dpkg -i /output/openssl{STREAM}-upstream-fips/deb/"
+                  f"openssl{STREAM}-upstream-fips_*_{DEB_ARCH}.deb 2>&1")
+    else:
+        r = t.run(f"rpm -U --replacepkgs /output/openssl{STREAM}-upstream-fips/rpm/"
+                  f"openssl{STREAM}-upstream-fips-[0-9]*.{RPM_ARCH}.rpm 2>&1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "re-activated" in (r.stdout + r.stderr), r.stdout + r.stderr
+
+    assert t.run(f"{t.helper} verify").returncode == 0, \
+        "the maintainer script did not re-activate the module"
+    assert t.run(f"printf abc | {t.ossl} dgst -md5").returncode != 0, \
+        "FIPS enforcement must survive a module upgrade"
+
+
 def test_removing_an_inactive_module_leaves_the_active_one_alone(fips_multi_fresh):
     t = fips_multi_fresh
-    active, removed = MULTI_VERSIONS[0], MULTI_VERSIONS[-1]
+    active, removed = MULTI_MODULES[0], MULTI_MODULES[-1]
     t.run(f"{t.helper} {active}", check=True)
 
     r = t.run(_remove_cmd(t.family, removed))
@@ -412,7 +518,7 @@ def test_removing_the_active_module_is_reported_not_silent(fips_multi_fresh):
     they selected goes away — but `verify` has to say so plainly, and the stream
     must not fall back to unapproved crypto."""
     t = fips_multi_fresh
-    active = MULTI_VERSIONS[0]
+    active = MULTI_MODULES[0]
     t.run(f"{t.helper} {active}", check=True)
 
     r = t.run(_remove_cmd(t.family, active))
@@ -425,8 +531,11 @@ def test_removing_the_active_module_is_reported_not_silent(fips_multi_fresh):
         "removing the module must not silently re-enable unapproved crypto"
 
 
-def _remove_cmd(fam, version):
-    pkg = f"openssl-fips{version}-upstream"
+def _remove_cmd(fam, module):
+    if module == COMPANION:
+        pkg = f"openssl{STREAM}-upstream-fips"
+    else:
+        pkg = f"openssl-fips{module}-upstream"
     if fam == "deb":
         return f"DEBIAN_FRONTEND=noninteractive apt-get remove -y {pkg} 2>&1"
     return f"dnf remove -y {pkg} 2>&1"

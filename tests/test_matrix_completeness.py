@@ -17,7 +17,8 @@ import subprocess
 import pytest
 
 from conftest import MATRIX, REPO, pkgdir, target_name, _main_pkgs
-from test_fips import FIPS_VERSION, _fips_dir, _fips_pkgs_present
+from test_fips import (COMPANION, FIPS_VERSION, _companion_dir,
+                       _companion_pkgs_present, _fips_dir, _fips_pkgs_present)
 
 requires_full_matrix = pytest.mark.skipif(
     not os.environ.get("REQUIRE_ALL_TARGETS"),
@@ -58,3 +59,11 @@ def test_fips_module_packages_present():
     missing = [f"{fam} (looked in {_fips_dir(fam)})"
                for fam in ("deb", "rpm") if not _fips_pkgs_present(fam)]
     assert not missing, f"no FIPS {FIPS_VERSION} packages for: " + "; ".join(missing)
+
+
+@requires_full_matrix
+def test_companion_fips_module_packages_present():
+    missing = [f"{fam} (looked in {_companion_dir(fam)})"
+               for fam in ("deb", "rpm") if not _companion_pkgs_present(fam)]
+    assert not missing, \
+        f"no companion FIPS module for stream {COMPANION}: " + "; ".join(missing)
