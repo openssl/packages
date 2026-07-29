@@ -57,7 +57,17 @@ jobs:
         target: ${{ fromJSON(needs.targets.outputs.targets) }}
     steps:
       - uses: actions/checkout@v7
+      # Keyed on everything that decides what the packages contain: the Makefile
+      # (stream, version, base images), build/ and packaging/. Changes elsewhere —
+      # tests, docs, this workflow — hit the cache. No restore-keys: a partial hit
+      # would leave another build's packages in output/ to be uploaded alongside.
+      - id: cache
+        uses: actions/cache@v6
+        with:
+          path: output/
+          key: packages-${{ matrix.arch }}-${{ matrix.target }}-t${{ env.RUN_TESTS }}-${{ hashFiles('Makefile', 'build/**', 'packaging/**') }}
       - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
         run: make ARCH=${{ matrix.arch }} ${{ matrix.target }}
       - uses: actions/upload-artifact@v7
         with:
@@ -77,7 +87,13 @@ jobs:
         family: [deb, rpm]
     steps:
       - uses: actions/checkout@v7
+      - id: cache
+        uses: actions/cache@v6
+        with:
+          path: output/
+          key: packages-${{ matrix.arch }}-fips-${{ matrix.family }}-t${{ env.RUN_TESTS }}-${{ hashFiles('Makefile', 'build/**', 'packaging/**') }}
       - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
         run: make ARCH=${{ matrix.arch }} fips-${{ matrix.family }}
       - uses: actions/upload-artifact@v7
         with:
