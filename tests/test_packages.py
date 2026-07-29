@@ -2,6 +2,26 @@
 built target via the `target` fixture (see conftest.py)."""
 import pytest
 
+
+@pytest.fixture
+def trust_restored(target):
+    """Yields the trust-anchor helper and puts the stream's trust store back to
+    the default afterwards, whatever the test did or how it failed.
+
+    The container is shared by the whole session, so a test that mutates the
+    trust store and then fails part-way would otherwise leave every later test
+    that needs TLS broken — an ordering-dependent cascade rather than one clear
+    failure.
+    """
+    tool = f"{target.prefix}/bin/openssl-trust-anchors"
+    ssldir = f"/etc/opt/openssl/{target.stream}"
+    try:
+        yield tool
+    finally:
+        target.run(f"rm -rf {ssldir}/cert.pem {ssldir}/certs {ssldir}/trust.conf")
+        target.run(f"{tool} system")
+
+
 # ---- isolation and installed layout ---------------------------------------
 
 def test_package_installed(target):
@@ -93,47 +113,85 @@ def test_ca_trust_wired(target):
     assert target.run(f"test -L /etc/opt/openssl/{target.stream}/cert.pem").returncode == 0
 
 
-def test_trust_anchors_toggle(target):
+def test_trust_anchors_toggle(target, tls_server, trust_restored):
     """The system CA anchors are opt-out: `none` unwires the stream's trust
-    store (TLS then fails), `system` restores it."""
+    store (TLS then fails), `system` restores it.
+
+    The server runs inside the container behind a CA installed into the
+    distribution's own trust store, so a successful handshake proves the system
+    anchors really are reached through our cert.pem — with no internet involved.
+    """
     ssldir = f"/etc/opt/openssl/{target.stream}"
-    tool = f"{target.prefix}/bin/openssl-trust-anchors"
-    tls = (f'echo Q | {target.prefix}/bin/openssl s_client -connect www.openssl.org:443 '
-           f'-servername www.openssl.org -verify_return_error -brief 2>&1')
+    tool = trust_restored
 
     target.run(f"{tool} none", check=True)
     assert target.run(f"test -e {ssldir}/cert.pem").returncode != 0, "cert.pem should be unwired"
-    assert "Verification: OK" not in target.run(tls).stdout, "TLS should fail with no anchors"
+    assert not tls_server.verifies(), "TLS should fail with no anchors"
+    # ...and it is the anchors that are gone, not the server that is broken:
+    # naming the CA explicitly still verifies.
+    assert tls_server.verifies(f"-CAfile {tls_server.ca_file}"), \
+        "an explicitly supplied CA should still verify when there are no anchors"
 
     target.run(f"{tool} system", check=True)
     assert target.run(f"test -L {ssldir}/cert.pem").returncode == 0, "cert.pem should be relinked"
-    assert "Verification: OK" in target.run(tls).stdout, "TLS should verify again"
+    assert tls_server.verifies(), "TLS should verify again"
 
 
-def test_trust_anchors_chosen_at_install_time(target):
-    """USE_SYSTEM_TRUST_ANCHORS=no at install time opts out — the same
-    mechanism on both package families, no pre-created files."""
+def test_administrator_provided_trust_store_is_preserved(target, trust_restored):
+    """The helper manages only its own symlinks: a real file left by an
+    administrator is reported and kept, never replaced."""
     ssldir = f"/etc/opt/openssl/{target.stream}"
-    tool = f"{target.prefix}/bin/openssl-trust-anchors"
+    tool = trust_restored
+
+    target.run(f"{tool} none", check=True)
+    target.run(f"rm -f {ssldir}/cert.pem", check=True)
+    target.run(f"printf '# administrator bundle\\n' > {ssldir}/cert.pem", check=True)
+
+    r = target.run(f"{tool} system")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "keeping administrator-provided" in r.stderr, r.stdout + r.stderr
+    assert target.run(f"test -L {ssldir}/cert.pem").returncode != 0, \
+        "an administrator-provided cert.pem must not be replaced by our symlink"
+    assert "administrator bundle" in target.out(f"cat {ssldir}/cert.pem")
+    assert "administrator-provided" in target.out(f"{tool} status")
+
+
+@pytest.mark.parametrize("frontend", ["package-manager", "low-level"])
+def test_trust_anchors_chosen_at_install_time(target, trust_restored, frontend):
+    """USE_SYSTEM_TRUST_ANCHORS=no at install time opts out — the same mechanism
+    on both package families, no pre-created files.
+
+    Exercised through both the high-level frontend the documentation tells people
+    to use (apt/dnf, which invoke maintainer scripts through their own
+    environment) and the low-level tool (dpkg/rpm). The variable has to reach the
+    scripts either way, and only apt/dnf is what anyone will actually type.
+    """
+    ssldir = f"/etc/opt/openssl/{target.stream}"
+    tool = trust_restored
     if target.family == "deb":
-        reinstall = (f"USE_SYSTEM_TRUST_ANCHORS=no dpkg -i "
-                     f"/pkgs/openssl{target.stream}-upstream_*_*.deb")
+        pkgs = f"/pkgs/openssl{target.stream}-upstream_*_*.deb"
+        reinstall = (f"DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall "
+                     f"--allow-downgrades {pkgs}" if frontend == "package-manager"
+                     else f"dpkg -i {pkgs}")
     else:
-        reinstall = (f"USE_SYSTEM_TRUST_ANCHORS=no rpm -U --replacepkgs "
-                     f"/pkgs/openssl{target.stream}-upstream-[0-9]*.rpm")
+        pkgs = f"/pkgs/openssl{target.stream}-upstream-[0-9]*.rpm"
+        reinstall = (f"dnf reinstall -y {pkgs}" if frontend == "package-manager"
+                     else f"rpm -U --replacepkgs {pkgs}")
+
     # start from the default, then reinstall opting out
     target.run(f"{tool} system", check=True)
     target.run(f"rm -f {ssldir}/trust.conf", check=True)
-    r = target.run(reinstall)
+    r = target.run(f"USE_SYSTEM_TRUST_ANCHORS=no {reinstall}")
     assert r.returncode == 0, f"reinstall failed:\n{r.stdout}\n{r.stderr}"
     assert target.run(f"test -e {ssldir}/cert.pem").returncode != 0, \
         "install-time opt-out should leave the trust store unwired"
     assert "no" in target.out(f"cat {ssldir}/trust.conf").lower(), "choice should be recorded"
+
     # and the recorded choice survives a plain reinstall (no env var)
-    target.run(reinstall.replace("USE_SYSTEM_TRUST_ANCHORS=no ", ""), check=True)
+    r = target.run(reinstall)
+    assert r.returncode == 0, f"plain reinstall failed:\n{r.stdout}\n{r.stderr}"
     assert target.run(f"test -e {ssldir}/cert.pem").returncode != 0, \
         "recorded opt-out should survive an upgrade"
-    target.run(f"{tool} system", check=True)   # restore for other tests
 
 
 # ---- functional: does the shipped library actually work -------------------
@@ -150,6 +208,33 @@ def test_enable_deactivate_roundtrip(target):
         '[ "$PATH" = "$before" ] && echo OK || {{ echo NOT_RESTORED; exit 1; }}'
     ).replace("{{", "{").replace("}}", "}")
     assert target.out(script) == "OK"
+
+
+@pytest.mark.parametrize("var", ["PATH", "PKG_CONFIG_PATH", "MANPATH"])
+def test_enable_restores_every_variable_it_touches(target, var):
+    """enable exports three variables and claims to restore each to exactly what
+    it was — including back to *unset* when it started unset, which is why the
+    script bothers with the ${var+x} dance. PATH alone passing proves nothing
+    about the other two.
+    """
+    p = target.prefix
+    # was-set case: a known value must come back byte for byte
+    was_set = (
+        f'export {var}=/sentinel/value; '
+        f'. {p}/enable >/dev/null; '
+        f'[ "${var}" = /sentinel/value ] && {{ echo NOT_MODIFIED; exit 1; }}; '
+        f'case ":${var}:" in *"{p}"*) ;; *) echo STREAM_MISSING; exit 1 ;; esac; '
+        f'openssl_upstream_deactivate; '
+        f'[ "${var}" = /sentinel/value ] && echo OK || {{ echo "GOT:${var}"; exit 1; }}'
+    )
+    assert target.out(was_set) == "OK", f"{var} was not restored to its previous value"
+
+    # was-unset case: it must end up unset again, not empty
+    was_unset = (
+        f'unset {var}; . {p}/enable >/dev/null; openssl_upstream_deactivate; '
+        f'if [ -n "${{{var}+x}}" ]; then echo "STILL_SET:${var}"; exit 1; fi; echo OK'
+    )
+    assert target.out(was_unset) == "OK", f"{var} was left set after deactivation"
 
 
 def test_default_provider_loads(target):
@@ -176,7 +261,18 @@ def test_ec_keygen(target):
     assert "PRIVATE KEY" in out
 
 
+def test_tls_handshake(target, tls_server):
+    """A full handshake and chain verification against a server in the container,
+    trusted through the distribution's CA store. Hermetic, so a failure here is
+    always our packaging and never someone else's network."""
+    assert tls_server.verifies(), target.run(tls_server.client_cmd()).stdout
+
+
+@pytest.mark.network
 def test_live_tls_handshake(target):
+    """The same handshake against the real internet. Deselected by default: it is
+    a useful smoke test of the shipped trust store, but it makes an unrelated
+    network problem look like a packaging regression."""
     r = target.run(
         f'echo Q | {target.prefix}/bin/openssl s_client -connect www.openssl.org:443 '
         f'-servername www.openssl.org -verify_return_error -brief 2>&1')
@@ -185,22 +281,10 @@ def test_live_tls_handshake(target):
 
 # ---- -dev: compile a real consumer and run it -----------------------------
 
-PROG = r'''#include <openssl/evp.h>
-#include <openssl/opensslv.h>
-#include <stdio.h>
-int main(void){
-    unsigned char md[32]; size_t n = 0;
-    EVP_Q_digest(NULL, "SHA256", NULL, "abc", 3, md, &n);
-    printf("%s %zu\n", OpenSSL_version(OPENSSL_VERSION_STRING), n);
-    return 0;
-}'''
-
-
 def test_devel_compile_and_run(target):
     script = (
         f'set -e; . {target.prefix}/enable; '
-        f'cat > /tmp/t.c <<"EOF"\n{PROG}\nEOF\n'
-        f'gcc /tmp/t.c $(pkg-config --cflags --libs openssl) -o /tmp/t; '
+        f'gcc /testdata/consumer.c $(pkg-config --cflags --libs openssl) -o /tmp/t; '
         # the pkg-config-embedded rpath must land in the consumer binary
         f'readelf -d /tmp/t | grep -q "{target.prefix}/lib64"; '
         f'/tmp/t'
