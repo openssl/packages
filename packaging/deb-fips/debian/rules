@@ -8,6 +8,13 @@ FIPSVER   = @FIPSVER@
 FIPS_CERT = @FIPS_CERT@
 TMP     = $(CURDIR)/debian/tmp
 
+# Build parallelism, from the environment (build/build-fips-deb.sh passes it).
+# Only how many compiler processes run at once, not what any of them is told to
+# do: the Security Policy's command and the build environment are unchanged, and
+# the rpm side already parallelises via %make_build, so this makes the two
+# families agree.
+JOBS ?= $(shell nproc)
+
 %:
 	dh $@
 
@@ -20,7 +27,9 @@ TMP     = $(CURDIR)/debian/tmp
 override_dh_auto_configure:
 	./Configure enable-fips
 
-# dh_auto_build (plain `make`) builds providers/fips.so.
+# `make` builds providers/fips.so.
+override_dh_auto_build:
+	$(MAKE) -j$(JOBS)
 
 override_dh_auto_test:
 

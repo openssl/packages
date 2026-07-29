@@ -19,10 +19,14 @@ wget -q "https://github.com/openssl/openssl/releases/download/openssl-${FIPSVER}
 
 cp "$SRCREPO/packaging/rpm-fips/openssl-fips-upstream.spec" "$topdir/SPECS/"
 
-echo ">> rpmbuild"
+echo ">> rpmbuild (JOBS=${JOBS:-auto})"
 FC=()
 [ -n "${FIPS_CERT:-}" ] && FC=(--define "fips_cert ${FIPS_CERT}")
-rpmbuild -bb --define "fipsver ${FIPSVER}" "${FC[@]}" "$topdir/SPECS/openssl-fips-upstream.spec"
+# Pin %make_build's -j; see packaging/rpm/build-in-container.sh.
+JB=()
+[ -n "${JOBS:-}" ] && JB=(--define "_smp_build_ncpus ${JOBS}")
+rpmbuild -bb --define "fipsver ${FIPSVER}" "${FC[@]}" "${JB[@]}" \
+    "$topdir/SPECS/openssl-fips-upstream.spec"
 
 echo ">> collect artifacts"
 find "$topdir/RPMS" -name '*.rpm' -exec cp -v {} "$OUT"/ \;

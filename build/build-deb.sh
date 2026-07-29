@@ -23,7 +23,7 @@ podman run --rm --platform "linux/${ARCH}" \
     -v "$REPO":/src:ro \
     -v "$OUT":/out \
     -e STREAM="$STREAM" -e VERSION="$VERSION" -e CODENAME="$SUITE" \
-    -e RUN_TESTS="${RUN_TESTS:-0}" \
+    -e RUN_TESTS="${RUN_TESTS:-0}" -e JOBS="${JOBS:-}" \
     "$IMAGE" \
     bash /src/packaging/deb/build-in-container.sh
 

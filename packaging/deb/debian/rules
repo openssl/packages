@@ -3,7 +3,14 @@
 # build time.
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
-export DEB_BUILD_OPTIONS ?= parallel=$(shell nproc)
+
+# Build parallelism. dpkg-buildpackage only puts -j into MAKEFLAGS when it is
+# forced with -J, so overriding dh_auto_build with a bare $(MAKE) builds
+# serially however DEB_BUILD_OPTIONS is set — the -j below is what actually
+# parallelises the OpenSSL build. JOBS comes from the environment
+# (build/build-deb.sh passes it through) so CI can pin it.
+JOBS ?= $(shell nproc)
+export DEB_BUILD_OPTIONS ?= parallel=$(JOBS)
 
 STREAM  = @STREAM@
 PKG     = openssl$(STREAM)-upstream
@@ -33,13 +40,13 @@ override_dh_auto_configure:
 	    $(CONF_CFLAGS) $(CONF_CPPFLAGS) $(CONF_LDFLAGS)
 
 override_dh_auto_build:
-	$(MAKE)
+	$(MAKE) -j$(JOBS)
 
 # Upstream's own test suite. Off by default (slow),
 # opt in with RUN_TESTS=1 for release/CI builds.
 override_dh_auto_test:
 ifeq ($(RUN_TESTS),1)
-	$(MAKE) test
+	$(MAKE) -j$(JOBS) test
 endif
 
 override_dh_auto_install:

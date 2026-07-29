@@ -16,6 +16,14 @@ VERSION ?= 4.0.1
 ARCH ?= amd64
 export ARCH
 
+# Parallelism for OpenSSL's own build inside each container, passed through to
+# `make -j` on deb and to rpm's %{_smp_build_ncpus} on rpm. Defaults to the
+# container's visible CPU count; pin it (JOBS=4) where memory per core is tight,
+# which is why CI sets it explicitly — EL's %{optflags} include -flto=auto, and
+# LTO link jobs multiply against this number.
+JOBS ?= $(shell nproc)
+export JOBS
+
 # RUN_TESTS=1 runs OpenSSL's own suite at build time (slow; per-toolchain gate).
 # Exported so `make RUN_TESTS=1 deb-bookworm` reaches the build scripts.
 RUN_TESTS ?= 0

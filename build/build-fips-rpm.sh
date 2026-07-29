@@ -18,7 +18,7 @@ echo "== fips rpm: openssl-fips${FIPSVER}-upstream on ${IMAGE} linux/${ARCH} =="
 podman run --rm --platform "linux/${ARCH}" \
     -v "$REPO":/src:ro \
     -v "$OUT":/out \
-    -e FIPSVER="$FIPSVER" -e FIPS_CERT="${FIPS_CERT:-}" \
+    -e FIPSVER="$FIPSVER" -e FIPS_CERT="${FIPS_CERT:-}" -e JOBS="${JOBS:-}" \
     "$IMAGE" \
     bash /src/packaging/rpm-fips/build-in-container.sh
 

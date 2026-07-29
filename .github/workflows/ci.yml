@@ -20,6 +20,7 @@ permissions:
 
 env:
   RUN_TESTS: ${{ inputs.run_openssl_tests && '1' || '0' }}
+  JOBS: "2"
 
 jobs:
   lint:

@@ -30,13 +30,18 @@ cp "$SRCREPO/packaging/common/variant-target.conf.in" "$topdir/SOURCES/"
 cp "$SRCREPO/packaging/common/fips-enable.in" "$topdir/SOURCES/"
 cp "$SRCREPO/packaging/common/openssl-fips.cnf.in" "$topdir/SOURCES/"
 
-echo ">> rpmbuild (RUN_TESTS=${RUN_TESTS:-0})"
+echo ">> rpmbuild (RUN_TESTS=${RUN_TESTS:-0}, JOBS=${JOBS:-auto})"
 RT=()
 [ "${RUN_TESTS:-0}" = 1 ] && RT=(--define "run_tests 1")
+# Pin %make_build's -j. Left at rpm's own CPU detection when JOBS is unset;
+# %{_smp_build_ncpus} is what both %{_smp_mflags} and RPM_BUILD_NCPUS derive
+# from, on EL9 (literal -jN) and EL10 (-j${RPM_BUILD_NCPUS}) alike.
+JB=()
+[ -n "${JOBS:-}" ] && JB=(--define "_smp_build_ncpus ${JOBS}")
 rpmbuild -bb \
     --define "stream ${STREAM}" \
     --define "version ${VERSION}" \
-    "${RT[@]}" \
+    "${RT[@]}" "${JB[@]}" \
     "$topdir/SPECS/openssl-upstream.spec"
 
 echo ">> collect artifacts"
