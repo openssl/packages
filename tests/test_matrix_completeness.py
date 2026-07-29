@@ -1,4 +1,4 @@
-"""Guard for automated runs.
+"""Guards against a green run that tested less than it looks like it did.
 
 The per-target fixtures skip when a target's packages are absent, which is what
 makes a partial local build usable. In an automated run that is dangerous: an
@@ -6,18 +6,44 @@ incomplete artifact download would skip everything and still report success.
 
 Set REQUIRE_ALL_TARGETS=1 to require that every target in the matrix, and the
 FIPS module packages, are actually present.
+
+The matrix-vs-Makefile check runs always: it needs no packages, only the two
+lists agreeing.
 """
 import os
+import shutil
+import subprocess
 
 import pytest
 
-from conftest import MATRIX, pkgdir, _main_pkgs
+from conftest import MATRIX, REPO, pkgdir, target_name, _main_pkgs
 from test_fips import FIPS_VERSION, _fips_dir, _fips_pkgs_present
 
 requires_full_matrix = pytest.mark.skipif(
     not os.environ.get("REQUIRE_ALL_TARGETS"),
     reason="set REQUIRE_ALL_TARGETS=1 to require the whole matrix",
 )
+
+
+def test_matrix_matches_makefile_targets():
+    """The build matrix (Makefile) and the test matrix (conftest) are separate
+    lists, and CI generates its build jobs from the first while the test job
+    iterates the second. If they drift, a release can be built, uploaded and
+    published without a single test ever touching it — and the completeness
+    checks below would not notice, because they only iterate MATRIX.
+    """
+    if shutil.which("make") is None:
+        pytest.skip("make not available")
+    r = subprocess.run(["make", "-s", "ci-targets"], cwd=REPO,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, f"make -s ci-targets failed:\n{r.stdout}\n{r.stderr}"
+
+    built = set(r.stdout.split())
+    tested = {target_name(fam, rel) for fam, rel, _ in MATRIX}
+    assert built == tested, (
+        "the Makefile and tests/conftest.py matrices disagree — "
+        f"built but never tested: {sorted(built - tested)}; "
+        f"tested but never built: {sorted(tested - built)}")
 
 
 @requires_full_matrix
