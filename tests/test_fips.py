@@ -268,12 +268,13 @@ def test_module_carries_the_distribution_link_flags(fips_target):
     %set_build_flags would be to export CFLAGS/CPPFLAGS/LDFLAGS from
     dpkg-buildflags in those rules, leaving the Configure command untouched.
 
-    Marked xfail for deb rather than skipped, so that fixing the packaging turns
-    this into an XPASS and forces the marker to be removed.
+    The deb case xfails only while the flag is genuinely absent, not merely
+    because it is deb: once those rules export dpkg-buildflags this starts
+    passing normally instead of reporting a stale expected failure.
     """
     t = fips_target
     dyn = t.out(f"readelf -dW /opt/openssl/fips/{FIPS_VERSION}/fips.so")
-    if t.family == "deb":
+    if t.family == "deb" and "BIND_NOW" not in dyn:
         pytest.xfail("deb-fips rules do not export dpkg-buildflags; see the docstring")
     assert "BIND_NOW" in dyn, f"the module did not get the distribution LDFLAGS:\n{dyn}"
 
