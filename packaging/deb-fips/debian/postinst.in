@@ -16,9 +16,9 @@ if [ "$1" = "configure" ]; then
         if [ -x "$helper" ] && "$helper" "@MODDIR@" >/dev/null 2>&1; then
             echo "OpenSSL $stream: FIPS module @MODDIR@ re-activated." >&2
         else
-            echo "WARNING: OpenSSL $stream: FIPS module @MODDIR@ could not be" >&2
-            echo "re-activated; the FIPS provider will NOT load for this stream" >&2
-            echo "until you run: $helper @MODDIR@" >&2
+            echo "WARNING: OpenSSL $stream: activation of FIPS module @MODDIR@" >&2
+            echo "failed; the FIPS provider will NOT load for this stream until" >&2
+            echo "you run: $helper @MODDIR@" >&2
         fi
     done
 fi

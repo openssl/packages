@@ -72,12 +72,16 @@ cmd_enable() {
     [ -r "$CNF_TEMPLATE" ] || { echo "missing $CNF_TEMPLATE" >&2; exit 1; }
 
     # Generate fipsmodule.cnf — this runs the module self-tests on this machine.
-    "$OSSL" fipsinstall -pedantic -provider_name fips \
+    # OPENSSL_CONF=/dev/null: openssl loads the default config at startup, and
+    # when FIPS is already enabled with a configuration that no longer matches
+    # the module (the exact state enable exists to repair — e.g. right after a
+    # module upgrade), that load fails before fipsinstall could run.
+    OPENSSL_CONF=/dev/null "$OSSL" fipsinstall -pedantic -provider_name fips \
         -module "$module" -out "$SSLDIR/fipsmodule.cnf"
 
     printf 'module = %s\n' "$module" >> "$SSLDIR/fipsmodule.cnf"
 
-    "$OSSL" fipsinstall -provider_name fips \
+    OPENSSL_CONF=/dev/null "$OSSL" fipsinstall -provider_name fips \
         -module "$module" -in "$SSLDIR/fipsmodule.cnf" -verify
 
     sed -e "s|@SSLDIR@|$SSLDIR|g" -e "s|@FIPS_VERSION@|$ver|g" \
@@ -95,7 +99,9 @@ cmd_verify() {
     module="$FIPSROOT/$ver/fips.so"
     [ -e "$module" ] || {
         echo "stream $STREAM: enabled module $ver is no longer installed" >&2; exit 1; }
-    if "$OSSL" fipsinstall -provider_name fips \
+    # OPENSSL_CONF=/dev/null so the check itself runs even when the active
+    # configuration is the thing that is broken (see cmd_enable).
+    if OPENSSL_CONF=/dev/null "$OSSL" fipsinstall -provider_name fips \
            -module "$module" -in "$SSLDIR/fipsmodule.cnf" -verify; then
         echo "stream $STREAM: fipsmodule.cnf matches FIPS module $ver."
     else

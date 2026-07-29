@@ -94,9 +94,9 @@ for enabled in /etc/opt/openssl/*/fips-enabled; do
     if [ -x "$helper" ] && "$helper" "%{moddir}" >/dev/null 2>&1; then
         echo "OpenSSL $stream: FIPS module %{moddir} re-activated." >&2
     else
-        echo "WARNING: OpenSSL $stream: FIPS module %{moddir} could not be" >&2
-        echo "re-activated; the FIPS provider will NOT load for this stream" >&2
-        echo "until you run: $helper %{moddir}" >&2
+        echo "WARNING: OpenSSL $stream: activation of FIPS module %{moddir}" >&2
+        echo "failed; the FIPS provider will NOT load for this stream until" >&2
+        echo "you run: $helper %{moddir}" >&2
     fi
 done
 
