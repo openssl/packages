@@ -33,12 +33,15 @@ export RUN_TESTS
 PYTEST      ?= uv run pytest
 PYTEST_ARGS ?= -v
 
-# FIPS provider modules, one package per source version, installed at
-# /opt/openssl/fips/<version>/. Built distro-independently (enable-fips only).
-# CERT_<version> names the NIST CMVP certificate for versions that hold one;
-# a version with no CERT_ entry is packaged as NOT NIST-validated.
-FIPS_VERSIONS ?= 3.1.2 $(VERSION)
-CERT_3.1.2     = 4985
+# FIPS provider modules, two kinds with different lifecycles:
+#   validated  openssl-fips<X.Y.Z>-upstream at /opt/openssl/fips/<X.Y.Z>/ —
+#              pinned per NIST-validated source version, published once, never
+#              changes. CERT_<version> names the CMVP certificate.
+#   companion  openssl<X.Y>-upstream-fips at /opt/openssl/fips/<X.Y>/ — built
+#              from the stream's current source ($(VERSION)), NOT validated,
+#              upgrades in step with the stream.
+FIPS_VALIDATED ?= 3.1.2
+CERT_3.1.2      = 4985
 
 # The version the test-suite exercises by default.
 FIPS_VERSION ?= 3.1.2
@@ -83,11 +86,14 @@ rpm: $(RPM_TARGETS)
 fips: fips-deb fips-rpm
 
 fips-deb:
-	$(foreach v,$(FIPS_VERSIONS),FIPS_CERT="$(CERT_$(v))" build/build-fips-deb.sh $(v) \
+	$(foreach v,$(FIPS_VALIDATED),FIPS_CERT="$(CERT_$(v))" build/build-fips-deb.sh $(v) \
 	    $(FIPS_DEB_SUITE) $(IMAGE_$(FIPS_DEB_SUITE)) &&) true
+	FIPS_STREAM=$(STREAM) build/build-fips-deb.sh $(VERSION) \
+	    $(FIPS_DEB_SUITE) $(IMAGE_$(FIPS_DEB_SUITE))
 fips-rpm:
-	$(foreach v,$(FIPS_VERSIONS),FIPS_CERT="$(CERT_$(v))" build/build-fips-rpm.sh $(v) \
+	$(foreach v,$(FIPS_VALIDATED),FIPS_CERT="$(CERT_$(v))" build/build-fips-rpm.sh $(v) \
 	    $(FIPS_EL_VER) &&) true
+	FIPS_STREAM=$(STREAM) build/build-fips-rpm.sh $(VERSION) $(FIPS_EL_VER)
 
 test:
 	@mkdir -p output
@@ -140,7 +146,7 @@ help:
 	@echo "  clean               remove built packages and stamps"
 	@echo
 	@echo "Releases:     $(DEB_TARGETS) $(RPM_TARGETS)"
-	@echo "FIPS modules: $(FIPS_VERSIONS)"
+	@echo "FIPS modules: validated $(FIPS_VALIDATED); companion $(STREAM) ($(VERSION))"
 	@echo "Override:     make VERSION=4.0.2 deb-bookworm"
 	@echo "Subset test:  make test PYTEST_ARGS='-k \"bookworm or rpm-9\"'"
 	@echo "Build tests:  make RUN_TESTS=1 deb-bookworm   (runs OpenSSL's own suite)"

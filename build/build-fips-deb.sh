@@ -14,14 +14,22 @@ IMAGE="${3:-debian:$SUITE}"
 ARCH="${ARCH:-amd64}"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="$REPO/output/openssl-fips${FIPSVER}-upstream/deb"
+# FIPS_STREAM=X.Y builds the stream's companion module instead of a pinned
+# validated version; the package name differs (see build-in-container.sh).
+if [ -n "${FIPS_STREAM:-}" ]; then
+    PKG="openssl${FIPS_STREAM}-upstream-fips"
+else
+    PKG="openssl-fips${FIPSVER}-upstream"
+fi
+OUT="$REPO/output/${PKG}/deb"
 mkdir -p "$OUT"
 
-echo "== fips deb: openssl-fips${FIPSVER}-upstream on ${IMAGE} linux/${ARCH} =="
+echo "== fips deb: ${PKG} ${FIPSVER} on ${IMAGE} linux/${ARCH} =="
 podman run --rm --platform "linux/${ARCH}" \
     -v "$REPO":/src:ro \
     -v "$OUT":/out \
     -e FIPSVER="$FIPSVER" -e CODENAME="$SUITE" -e FIPS_CERT="${FIPS_CERT:-}" \
+    -e FIPS_STREAM="${FIPS_STREAM:-}" \
     -e JOBS="${JOBS:-}" \
     "$IMAGE" \
     bash /src/packaging/deb-fips/build-in-container.sh

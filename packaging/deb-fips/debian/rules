@@ -1,11 +1,13 @@
 #!/usr/bin/make -f
-# FIPS provider module packaging. @FIPSVER@ and @FIPS_CERT@ are substituted at
-# build time. Configured with `enable-fips` and no other OpenSSL options, per
-# the module Security Policy.
-# -march flags — so its bytes match the Security Policy's documented build.
+# FIPS provider module packaging, two modes (see build-in-container.sh):
+# validated (pinned per source version) and stream companion (FIPS_STREAM set,
+# named after the stream, upgrades with it). Configured with `enable-fips` and
+# no other OpenSSL options, per the module Security Policy.
 
-FIPSVER   = @FIPSVER@
-FIPS_CERT = @FIPS_CERT@
+FIPSVER     = @FIPSVER@
+FIPS_CERT   = @FIPS_CERT@
+FIPS_STREAM = @FIPS_STREAM@
+MODDIR      = @MODDIR@
 TMP     = $(CURDIR)/debian/tmp
 
 # Build parallelism, from the environment (build/build-fips-deb.sh passes it).
@@ -36,13 +38,18 @@ override_dh_auto_build:
 override_dh_auto_test:
 
 override_dh_auto_install:
-	install -Dm755 providers/fips.so $(TMP)/opt/openssl/fips/$(FIPSVER)/fips.so
+	install -Dm755 providers/fips.so $(TMP)/opt/openssl/fips/$(MODDIR)/fips.so
 	# A 'validated' marker beside the module records the NIST CMVP certificate
 	# for source versions that hold one; openssl-fips-enable reports it. Absent
 	# means this version is not NIST-validated.
 	if [ -n "$(FIPS_CERT)" ]; then \
 	    echo "NIST CMVP certificate #$(FIPS_CERT)" \
-	        > $(TMP)/opt/openssl/fips/$(FIPSVER)/validated; \
+	        > $(TMP)/opt/openssl/fips/$(MODDIR)/validated; \
+	fi
+	# A stream companion's directory is named after the stream, so the source
+	# version it was built from is recorded beside it for the helper to report.
+	if [ -n "$(FIPS_STREAM)" ]; then \
+	    echo "$(FIPSVER)" > $(TMP)/opt/openssl/fips/$(MODDIR)/version; \
 	fi
 
 # Fail the build if anything staged into debian/tmp is not packaged. rpm already

@@ -13,14 +13,22 @@ IMAGE="${3:-almalinux:$EL}"
 ARCH="${ARCH:-amd64}"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="$REPO/output/openssl-fips${FIPSVER}-upstream/rpm"
+# FIPS_STREAM=X.Y builds the stream's companion module instead of a pinned
+# validated version; the package name differs (see build-in-container.sh).
+if [ -n "${FIPS_STREAM:-}" ]; then
+    PKG="openssl${FIPS_STREAM}-upstream-fips"
+else
+    PKG="openssl-fips${FIPSVER}-upstream"
+fi
+OUT="$REPO/output/${PKG}/rpm"
 mkdir -p "$OUT"
 
-echo "== fips rpm: openssl-fips${FIPSVER}-upstream on ${IMAGE} linux/${ARCH} =="
+echo "== fips rpm: ${PKG} ${FIPSVER} on ${IMAGE} linux/${ARCH} =="
 podman run --rm --platform "linux/${ARCH}" \
     -v "$REPO":/src:ro \
     -v "$OUT":/out \
-    -e FIPSVER="$FIPSVER" -e FIPS_CERT="${FIPS_CERT:-}" -e JOBS="${JOBS:-}" \
+    -e FIPSVER="$FIPSVER" -e FIPS_CERT="${FIPS_CERT:-}" \
+    -e FIPS_STREAM="${FIPS_STREAM:-}" -e JOBS="${JOBS:-}" \
     "$IMAGE" \
     bash /src/packaging/rpm-fips/build-in-container.sh
 

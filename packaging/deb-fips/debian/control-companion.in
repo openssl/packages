@@ -1,0 +1,27 @@
+Source: @FIPSPKG@
+Section: libs
+Priority: optional
+Maintainer: OpenSSL Packages <openssl-packages@openssl.org>
+Build-Depends: debhelper (>= 12~), perl
+Standards-Version: 4.6.2
+Homepage: https://openssl-library.org
+
+Package: @FIPSPKG@
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: OpenSSL FIPS provider for the @MODDIR@ stream (upstream build, not validated)
+ The OpenSSL FIPS provider module (fips.so) built from the same source
+ release as the openssl@MODDIR@-upstream packages, with `enable-fips` and
+ nothing else, installed at /opt/openssl/fips/@MODDIR@/fips.so. It upgrades
+ in step with the @MODDIR@ stream, so it always matches the stream's
+ current source.
+ .
+ This module is NOT NIST-validated. It enforces approved-only algorithms —
+ useful for developing and testing FIPS-mode behaviour — but it does not
+ make an installation FIPS 140-3 compliant. For compliance, install a
+ validated openssl-fips<version>-upstream package instead.
+ .
+ Activate it for a stream on the deployment machine, e.g.:
+   /opt/openssl/@MODDIR@/bin/openssl-fips-enable @MODDIR@
+ On upgrade the module is re-activated automatically for any stream that
+ has it enabled, so its integrity checksum keeps matching the new bytes.

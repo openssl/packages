@@ -3,13 +3,17 @@
 # and activate FIPS mode for this stream.
 #
 #   openssl-fips-enable list
-#   openssl-fips-enable <fips-version>    # e.g. 3.1.2
+#   openssl-fips-enable <module>          # e.g. 3.1.2 (validated) or 4.0 (stream)
 #   openssl-fips-enable verify
 #   openssl-fips-enable disable
 #
-# Modules are installed per source version under /opt/openssl/fips/<version>/ by
-# the openssl-fips<version>-upstream packages, and are selected by ABSOLUTE PATH
-# in the generated configuration (the config(5) "module" key).
+# Two kinds of module live under /opt/openssl/fips/, selected by ABSOLUTE PATH in
+# the generated configuration (the config(5) "module" key):
+#   /opt/openssl/fips/<X.Y.Z>/  NIST-validated, pinned source version, never
+#                               changes (openssl-fips<X.Y.Z>-upstream)
+#   /opt/openssl/fips/<X.Y>/    built from the X.Y stream's current source,
+#                               NOT validated, upgrades with the stream
+#                               (openssl<X.Y>-upstream-fips)
 set -eu
 
 STREAM="@STREAM@"
@@ -21,16 +25,20 @@ CNF_TEMPLATE="$PREFIX/share/openssl-fips.cnf.in"
 ENABLED="$SSLDIR/fips-enabled"
 
 usage() {
-    echo "usage: openssl-fips-enable list | <fips-version> | verify | disable" >&2
+    echo "usage: openssl-fips-enable list | <module> | verify | disable" >&2
     exit 1
 }
 
-# A module package ships a 'validated' file beside fips.so when that source
-# version holds a NIST CMVP certificate; its content names the certificate.
-# Argument: FIPS module version.
+# A validated module ships a 'validated' file beside fips.so naming its NIST
+# CMVP certificate. A stream companion module ships a 'version' file instead —
+# its directory is named after the stream, so the actual source version it was
+# built from is recorded there. Argument: module directory name.
 validation_note() {
     if [ -r "$FIPSROOT/$1/validated" ]; then
         printf 'validated, %s' "$(cat "$FIPSROOT/$1/validated")"
+    elif [ -r "$FIPSROOT/$1/version" ]; then
+        printf 'version %s, tracks the %s stream, NOT NIST-validated' \
+            "$(cat "$FIPSROOT/$1/version")" "$1"
     else
         printf 'NOT NIST-validated'
     fi
@@ -47,7 +55,8 @@ cmd_list() {
         printf '  %-10s %s\n' "$v" "($(validation_note "$v"))"
     done
     [ -n "$found" ] || \
-        echo "  (none — install an openssl-fips<version>-upstream package)"
+        echo "  (none — install an openssl-fips<version>-upstream package," \
+             "or openssl<stream>-upstream-fips for the stream's own module)"
     if [ -r "$ENABLED" ]; then
         echo "Enabled for $STREAM: $(cat "$ENABLED")"
     else

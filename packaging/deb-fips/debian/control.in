@@ -1,4 +1,4 @@
-Source: openssl-fips@FIPSVER@-upstream
+Source: @FIPSPKG@
 Section: libs
 Priority: optional
 Maintainer: OpenSSL Packages <openssl-packages@openssl.org>
@@ -6,17 +6,18 @@ Build-Depends: debhelper (>= 12~), perl
 Standards-Version: 4.6.2
 Homepage: https://openssl-library.org
 
-Package: openssl-fips@FIPSVER@-upstream
+Package: @FIPSPKG@
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: OpenSSL FIPS provider @FIPSVER@ (upstream build)
  The OpenSSL FIPS provider module (fips.so) built from source release
  @FIPSVER@ with `enable-fips` and nothing else, installed at
- /opt/openssl/fips/@FIPSVER@/fips.so — a stream-independent path, so one
- module can serve any installed OpenSSL stream.
+ /opt/openssl/fips/@MODDIR@/fips.so — a stream-independent path, so one
+ module can serve any installed OpenSSL stream. This version is pinned:
+ the package never moves to a different source release.
  .
  Activate it for a stream on the deployment machine, e.g.:
-   /opt/openssl/4.0/bin/openssl-fips-enable @FIPSVER@
+   /opt/openssl/4.0/bin/openssl-fips-enable @MODDIR@
  .
  Whether this source version holds a NIST CMVP certificate is reported by
  "openssl-fips-enable list"; a module without one enforces approved-only
