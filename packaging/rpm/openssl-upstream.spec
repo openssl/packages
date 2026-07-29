@@ -71,11 +71,13 @@ export OPENSSL_LOCAL_CONFIG_DIR=$PWD/.openssl-local-config
     shared \
     %{optflags} \
     %{build_ldflags}
-%make_build
+# Build exactly what gets installed, which is not what the default target builds.
+%make_build build_inst_sw build_man_docs
 
 %check
 # Upstream's own suite — redundant for code correctness, useful as a
 # per-toolchain gate. Off by default; enable with --define "run_tests 1".
+# The `test` target builds the test programs itself.
 %if "%{?run_tests}" == "1"
 make test
 %endif

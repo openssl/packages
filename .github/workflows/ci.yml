@@ -20,7 +20,7 @@ permissions:
 
 env:
   RUN_TESTS: ${{ inputs.run_openssl_tests && '1' || '0' }}
-  JOBS: "2"
+  JOBS: "4"
 
 jobs:
   lint:
@@ -47,7 +47,7 @@ jobs:
 
   build:
     name: ${{ matrix.target }} (${{ matrix.arch }})
-    needs: targets
+    needs: [targets, lint]
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     strategy:
@@ -104,7 +104,7 @@ jobs:
           path: output/
       - name: Show what will be tested
         run: find output -name '*.deb' -o -name '*.ddeb' -o -name '*.rpm' | sort
-      - uses: astral-sh/setup-uv@v9
+      - uses: astral-sh/setup-uv@v9.0.0
       - name: Run the package test suite
         env:
           REQUIRE_ALL_TARGETS: "1"

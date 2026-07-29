@@ -27,9 +27,11 @@ JOBS ?= $(shell nproc)
 override_dh_auto_configure:
 	./Configure enable-fips
 
-# `make` builds providers/fips.so.
+# providers/fips.so is MODULES{fips}, so build_modules is what produces it. The
+# default target also builds the test programs, which this package does not ship;
+# skipping them leaves fips.so byte-identical.
 override_dh_auto_build:
-	$(MAKE) -j$(JOBS)
+	$(MAKE) -j$(JOBS) build_modules
 
 override_dh_auto_test:
 

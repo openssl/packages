@@ -39,11 +39,14 @@ override_dh_auto_configure:
 	    shared \
 	    $(CONF_CFLAGS) $(CONF_CPPFLAGS) $(CONF_LDFLAGS)
 
+# Build exactly what gets installed, which is not what the default target
+# builds.
 override_dh_auto_build:
-	$(MAKE) -j$(JOBS)
+	$(MAKE) -j$(JOBS) build_inst_sw build_man_docs
 
 # Upstream's own test suite. Off by default (slow),
-# opt in with RUN_TESTS=1 for release/CI builds.
+# opt in with RUN_TESTS=1 for release/CI builds. The `test` target builds the
+# test programs itself, which is why they are not built above.
 override_dh_auto_test:
 ifeq ($(RUN_TESTS),1)
 	$(MAKE) -j$(JOBS) test

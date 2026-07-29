@@ -40,7 +40,10 @@ stream-independent path so one module can serve any installed OpenSSL stream.
 # integrity MAC is computed over whatever bytes result.
 %set_build_flags
 ./Configure enable-fips
-%make_build
+# providers/fips.so is MODULES{fips}, so build_modules is what produces it. The
+# default target also builds the test programs, which this package does not ship;
+# skipping them leaves fips.so byte-identical.
+%make_build build_modules
 
 %install
 install -Dm755 providers/fips.so %{buildroot}%{fipsroot}/fips.so
