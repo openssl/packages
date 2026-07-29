@@ -3,8 +3,15 @@ clean container, activate FIPS with `openssl-fips-enable`, and check that the
 module loads under the stream's libcrypto and enforces approved-only crypto.
 
 This is where cross-major loading (a 3.x-validated module under a 4.x
-libcrypto) is exercised empirically. Parametrized over
-one deb and one rpm target; skips if the FIPS packages aren't built yet.
+libcrypto) is exercised empirically.
+
+Parametrized over the WHOLE release matrix, not just the two releases the module
+is built on. One module build serves a whole family, so every release is a
+separate claim: the module links libc.so.6 and inherits a glibc symbol-version
+floor from its builder, so a module built on too new a release is simply
+uninstallable on the older ones. Testing only the build platforms cannot see that
+— it is how a module needing GLIBC_2.34 shipped while bullseye and focal (2.31)
+could not install it.
 """
 import glob
 import os
@@ -13,16 +20,17 @@ import subprocess
 
 import pytest
 
-from conftest import (STREAM, ARCH, DATADIR, DEB_ARCH, RPM_ARCH, REPO, PODMAN,
-                      pkgdir, start_container)
+from conftest import (MATRIX, STREAM, ARCH, DATADIR, DEB_ARCH, RPM_ARCH, REPO,
+                      PODMAN, pkgdir, start_container)
 
 FIPS_VERSION = os.environ.get("FIPS_VERSION", "3.1.2")
 
-# (family, release, image) — FIPS module is distro-independent; test on one of each.
-FIPS_TARGETS = [
-    ("deb", "bookworm", "debian:12"),
-    ("rpm", "9", "almalinux:9"),
-]
+# Every release we publish for: the module has to install and load on all of them.
+FIPS_TARGETS = MATRIX
+
+# Version coexistence and switching are distro-independent, so those tests use a
+# single container rather than repeating across the matrix.
+MULTI_TARGET = ("deb", "bookworm", "debian:12")
 
 # The CMVP certificate each validated source version holds, mirroring the
 # Makefile's CERT_<version> variables. A version absent from here is expected to
@@ -295,7 +303,7 @@ def _multi_install_script(fam, versions):
 def _multi_container():
     if len(MULTI_VERSIONS) < 2:
         pytest.skip("need two FIPS module versions built (e.g. make fips-deb fips-rpm)")
-    fam, rel, image = FIPS_TARGETS[0]
+    fam, rel, image = MULTI_TARGET
     for v in MULTI_VERSIONS:
         if not _fips_pkgs_present(fam, v):
             pytest.skip(f"FIPS {v} packages for {fam} not built")
