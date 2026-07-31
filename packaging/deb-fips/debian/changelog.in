@@ -1,5 +1,5 @@
 @FIPSPKG@ (@FIPSVER@-@REVISION@) @CODENAME@; urgency=medium
 
-  * OpenSSL FIPS provider @FIPSVER@ packaged for /opt (proof-of-concept build).
+  * OpenSSL FIPS provider @FIPSVER@, packaged for /opt.
 
  -- OpenSSL Packages <openssl-packages@openssl.org>  @DATE@

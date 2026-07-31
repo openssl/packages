@@ -1,5 +1,5 @@
 openssl@STREAM@-upstream (@VERSION@-@REVISION@) @CODENAME@; urgency=medium
 
-  * Upstream OpenSSL @VERSION@, packaged for /opt (proof-of-concept build).
+  * Upstream OpenSSL @VERSION@, packaged for /opt.
 
  -- OpenSSL Packages <openssl-packages@openssl.org>  @DATE@

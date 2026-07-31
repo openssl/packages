@@ -160,4 +160,4 @@ fi
 
 %changelog
 * Tue Jul 21 2026 OpenSSL Packages <openssl-packages@openssl.org> - %{version}-%{revision}
-- Upstream OpenSSL %{version}, packaged for /opt (proof-of-concept build).
+- Upstream OpenSSL %{version}, packaged for /opt.

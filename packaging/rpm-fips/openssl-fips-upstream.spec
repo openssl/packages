@@ -101,4 +101,4 @@ done
 
 %changelog
 * Tue Jul 21 2026 OpenSSL Packages <openssl-packages@openssl.org> - %{fipsver}-%{revision}
-- OpenSSL FIPS provider %{fipsver} packaged for /opt (proof-of-concept build).
+- OpenSSL FIPS provider %{fipsver}, packaged for /opt.
