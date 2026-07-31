@@ -5,11 +5,28 @@ hard-coding a list; these tests assert the properties that survive into the
 shipped objects. The FIPS module is exempt and checked in test_fips.py: it is
 built with the bare Security Policy command, so it has no BIND_NOW.
 """
+import re
+
 import pytest
+
+from conftest import REVISION
 
 
 def _dynamic(target, path):
     return target.out(f"readelf -dW {path}")
+
+
+def _package_names(target):
+    if target.family == "rpm":
+        return [f"openssl{target.stream}-upstream",
+                f"openssl{target.stream}-upstream-devel"]
+    return [f"openssl{target.stream}-upstream",
+            f"openssl{target.stream}-upstream-dev"]
+
+
+def _file_list(target, pkg):
+    cmd = f"rpm -ql {pkg}" if target.family == "rpm" else f"dpkg -L {pkg}"
+    return target.out(cmd).splitlines()
 
 
 def _segments(target, path):
@@ -142,3 +159,57 @@ def test_config_is_marked_as_configuration(target):
         conffiles = target.out(
             f"dpkg-query -W -f='${{Conffiles}}' openssl{target.stream}-upstream")
         assert cnf in conffiles, f"{cnf} is not a conffile:\n{conffiles}"
+
+
+def test_package_version_carries_the_revision(target):
+    """The revision is what makes a republish of the same upstream version
+    upgradable, so it has to reach the package metadata and not just the
+    filename. A broken substitution would only show up at publish time."""
+    expected = f"{target.stream}."
+    for pkg in _package_names(target):
+        if target.family == "rpm":
+            got = target.out(f"rpm -q --qf '%{{VERSION}}-%{{RELEASE}}' {pkg}")
+            ver, _, rel = got.partition("-")
+            assert rel.split(".")[0] == REVISION, f"{pkg}: release {rel!r} != {REVISION}"
+        else:
+            got = target.out(f"dpkg-query -W -f='${{Version}}' {pkg}")
+            ver, _, rel = got.rpartition("-")
+            assert rel == REVISION, f"{pkg}: revision {rel!r} != {REVISION}"
+        assert ver.startswith(expected), f"{pkg}: version {ver!r} is not {expected}x"
+
+
+def test_no_html_manual_is_packaged(target):
+    """We install man pages only. On rpm this is what %make_install would undo:
+    the bare `install` target pulls in install_html_docs and stages the whole
+    HTML manual into %{prefix}/share/doc, which %files then claims."""
+    for pkg in _package_names(target):
+        html = [f for f in _file_list(target, pkg) if "/share/doc/" in f and "/html" in f]
+        assert not html, f"{pkg} ships {len(html)} HTML manual files, e.g. {html[:2]}"
+
+
+def test_no_unsubstituted_placeholders_in_shipped_metadata(target):
+    """Every template is rendered at build time; a leaked @TOKEN@ would ship in
+    public package metadata. Provisional wording is checked here too, for the
+    same reason: it is visible to anyone running apt/dnf."""
+    placeholder = re.compile(r"@[A-Z_]+@")
+    provisional = re.compile(r"proof-of-concept|placeholder|FIXME|TODO", re.I)
+
+    for pkg in _package_names(target):
+        if target.family == "rpm":
+            texts = {
+                "description": target.out(f"rpm -q --qf '%{{DESCRIPTION}}' {pkg}"),
+                "summary": target.out(f"rpm -q --qf '%{{SUMMARY}}' {pkg}"),
+                "changelog": target.out(f"rpm -q --changelog {pkg}"),
+            }
+        else:
+            texts = {
+                "description": target.out(f"dpkg-query -W -f='${{Description}}' {pkg}"),
+                "changelog": target.out(
+                    f"zcat /usr/share/doc/{pkg}/changelog.Debian.gz"),
+            }
+        for what, text in texts.items():
+            assert not placeholder.search(text), \
+                f"{pkg} {what} has an unsubstituted placeholder: " \
+                f"{placeholder.search(text).group(0)}"
+            assert not provisional.search(text), \
+                f"{pkg} {what} has provisional wording: {provisional.search(text).group(0)}"

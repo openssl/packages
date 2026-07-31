@@ -23,6 +23,8 @@ import subprocess
 import pytest
 
 STREAM = os.environ.get("STREAM", "4.0")
+# Must match what the packages under test were built with; make test passes it.
+REVISION = os.environ.get("REVISION", "1")
 ARCH = os.environ.get("ARCH", "amd64")            # amd64 | arm64
 DEB_ARCH = {"amd64": "amd64", "arm64": "arm64"}[ARCH]
 RPM_ARCH = {"amd64": "x86_64", "arm64": "aarch64"}[ARCH]
