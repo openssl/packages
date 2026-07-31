@@ -1,23 +1,10 @@
-"""Two OpenSSL library families alive in one process.
+"""Two OpenSSL library families alive in one process — the outcome the isolation
+machinery exists for, which the rest of the suite only checks statically.
 
-Everything else in the suite checks the isolation machinery statically: the
-SONAME carries an `-upstream` marker, the symbol versions are variant-scoped, the
-RUNPATH points into the stream. Those are the mechanism, not the outcome. Here
-the outcome itself is exercised — the distribution's libcrypto and ours resident
-in the same address space, each answering for itself — because that is the claim
-the packaging actually makes, and a static check can pass while it is false.
-
-Two shapes, both built from real sources under tests/data:
-
-  * dual_libcrypto.c — dlopen both objects by path with RTLD_GLOBAL, in either
-    order, using only the pre-1.1.1 API so the distribution's copy can serve too.
-  * plugin_host.c + plugin.c — a program linked against the system libcrypto that
-    dlopens a plugin linked against ours. This is the shape a real application
-    hits, and the one where a shared SONAME or symbol version would silently bind
-    the plugin to the wrong library.
-
-SHA-256("abc") is the fixed answer both sides must produce while sharing the
-process.
+Two shapes, built from real sources under tests/data: dual_libcrypto.c dlopens
+both libcryptos by path in either order, and plugin_host.c + plugin.c is a
+program linked against the system libcrypto loading a plugin linked against
+ours. Both sides must return SHA-256("abc") while sharing the process.
 """
 import subprocess
 

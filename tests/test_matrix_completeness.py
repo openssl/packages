@@ -1,14 +1,9 @@
 """Guards against a green run that tested less than it looks like it did.
 
-The per-target fixtures skip when a target's packages are absent, which is what
-makes a partial local build usable. In an automated run that is dangerous: an
-incomplete artifact download would skip everything and still report success.
-
-Set REQUIRE_ALL_TARGETS=1 to require that every target in the matrix, and the
-FIPS module packages, are actually present.
-
-The matrix-vs-Makefile check runs always: it needs no packages, only the two
-lists agreeing.
+The per-target fixtures skip when packages are absent, which makes a partial
+local build usable but would let an incomplete artifact download report success.
+REQUIRE_ALL_TARGETS=1 makes absence a failure. The matrix-vs-Makefile check
+needs no packages and always runs.
 """
 import os
 import shutil

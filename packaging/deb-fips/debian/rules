@@ -10,28 +10,21 @@ FIPS_STREAM = @FIPS_STREAM@
 MODDIR      = @MODDIR@
 TMP     = $(CURDIR)/debian/tmp
 
-# Build parallelism, from the environment (build/build-fips-deb.sh passes it).
-# Only how many compiler processes run at once, not what any of them is told to
-# do: the Security Policy's command and the build environment are unchanged, and
-# the rpm side already parallelises via %make_build, so this makes the two
-# families agree.
+# Only how many compiler processes run at once; the Security Policy's command
+# and the build environment are unchanged.
 JOBS ?= $(shell nproc)
 
 %:
 	dh $@
 
-# Exact build command from the module Security Policy (3.1.2, cert #4985) §11.1,
-# Crypto Officer Guidance / Installation, step 1: `./Configure enable-fips` then
-# `make`. The build environment is left exactly as the packaging tools set it:
-# the Security Policy prescribes a command, not an environment, so altering it
-# would itself be an undocumented deviation. Validation is source-based and the
-# source is unmodified; the integrity MAC is computed over whatever bytes result.
+# The Security Policy's exact command (3.1.2 cert #4985, §11.1 step 1). The
+# environment is left as the packaging tools set it: the SP prescribes a
+# command, not an environment.
 override_dh_auto_configure:
 	./Configure enable-fips
 
-# providers/fips.so is MODULES{fips}, so build_modules is what produces it. The
-# default target also builds the test programs, which this package does not ship;
-# skipping them leaves fips.so byte-identical.
+# providers/fips.so is MODULES{fips}. Skipping the test programs the default
+# target would also build leaves fips.so byte-identical.
 override_dh_auto_build:
 	$(MAKE) -j$(JOBS) build_modules
 
@@ -39,23 +32,18 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	install -Dm755 providers/fips.so $(TMP)/opt/openssl/fips/$(MODDIR)/fips.so
-	# A 'validated' marker beside the module records the NIST CMVP certificate
-	# for source versions that hold one; openssl-fips-enable reports it. Absent
-	# means this version is not NIST-validated.
+	# Records the CMVP certificate; absent means not NIST-validated.
 	if [ -n "$(FIPS_CERT)" ]; then \
 	    echo "NIST CMVP certificate #$(FIPS_CERT)" \
 	        > $(TMP)/opt/openssl/fips/$(MODDIR)/validated; \
 	fi
-	# A stream companion's directory is named after the stream, so the source
-	# version it was built from is recorded beside it for the helper to report.
+	# The companion's dir is the stream, so record the source version beside it.
 	if [ -n "$(FIPS_STREAM)" ]; then \
 	    echo "$(FIPSVER)" > $(TMP)/opt/openssl/fips/$(MODDIR)/version; \
 	fi
 
-# Fail the build if anything staged into debian/tmp is not packaged. rpm already
-# behaves this way (%_unpackaged_files_terminate_build defaults to 1), and
-# compat 13 makes --fail-missing the dh_missing default — but the oldest target
-# (Ubuntu 20.04) only has debhelper 12, so ask for it explicitly.
+# Fail if anything staged into debian/tmp is not packaged. Explicit because the
+# oldest target only has debhelper 12, where it is not the default.
 override_dh_missing:
 	dh_missing --fail-missing
 

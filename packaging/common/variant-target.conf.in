@@ -3,10 +3,8 @@
 # into a directory pointed at by OPENSSL_LOCAL_CONFIG_DIR. Same format as
 # OpenSSL's own Configurations/*.conf (this file is evaluated as Perl).
 #
-# shlib_variant gives the libraries a distinct SONAME *and* distinct symbol
-# versions (libcrypto@VARIANT@.so.N, OPENSSL_<VARIANT>_x.y), so our build can
-# never be conflated with a distribution's same-major OpenSSL inside one
-# process.
+# shlib_variant gives a distinct SONAME *and* distinct symbol versions, so our
+# build cannot be conflated with a distribution's same-major OpenSSL.
 
 my %targets = (
     "@BASE@@VARIANT@" => {

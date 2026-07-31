@@ -7,13 +7,9 @@
 #   openssl-fips-enable verify
 #   openssl-fips-enable disable
 #
-# Two kinds of module live under /opt/openssl/fips/, selected by ABSOLUTE PATH in
-# the generated configuration (the config(5) "module" key):
-#   /opt/openssl/fips/<X.Y.Z>/  NIST-validated, pinned source version, never
-#                               changes (openssl-fips<X.Y.Z>-upstream)
-#   /opt/openssl/fips/<X.Y>/    built from the X.Y stream's current source,
-#                               NOT validated, upgrades with the stream
-#                               (openssl<X.Y>-upstream-fips)
+# Modules live under /opt/openssl/fips/ and are selected by absolute path in the
+# generated config (the config(5) "module" key): <X.Y.Z>/ is a pinned validated
+# module, <X.Y>/ the stream's companion.
 set -eu
 
 STREAM="@STREAM@"
@@ -29,10 +25,8 @@ usage() {
     exit 1
 }
 
-# A validated module ships a 'validated' file beside fips.so naming its NIST
-# CMVP certificate. A stream companion module ships a 'version' file instead —
-# its directory is named after the stream, so the actual source version it was
-# built from is recorded there. Argument: module directory name.
+# Validated modules ship a 'validated' file naming their CMVP certificate;
+# companions ship a 'version' file. Argument: module directory name.
 validation_note() {
     if [ -r "$FIPSROOT/$1/validated" ]; then
         printf 'validated, %s' "$(cat "$FIPSROOT/$1/validated")"
@@ -71,11 +65,8 @@ cmd_enable() {
     [ -e "$module" ]  || { echo "FIPS module $ver is not installed" >&2; exit 1; }
     [ -r "$CNF_TEMPLATE" ] || { echo "missing $CNF_TEMPLATE" >&2; exit 1; }
 
-    # Generate fipsmodule.cnf — this runs the module self-tests on this machine.
-    # OPENSSL_CONF=/dev/null: openssl loads the default config at startup, and
-    # when FIPS is already enabled with a configuration that no longer matches
-    # the module (the exact state enable exists to repair — e.g. right after a
-    # module upgrade), that load fails before fipsinstall could run.
+    # Runs the module self-tests on this machine. OPENSSL_CONF=/dev/null so a
+    # config that no longer matches the module cannot break its own repair.
     OPENSSL_CONF=/dev/null "$OSSL" fipsinstall -pedantic -provider_name fips \
         -module "$module" -out "$SSLDIR/fipsmodule.cnf"
 
@@ -99,8 +90,7 @@ cmd_verify() {
     module="$FIPSROOT/$ver/fips.so"
     [ -e "$module" ] || {
         echo "stream $STREAM: enabled module $ver is no longer installed" >&2; exit 1; }
-    # OPENSSL_CONF=/dev/null so the check itself runs even when the active
-    # configuration is the thing that is broken (see cmd_enable).
+    # OPENSSL_CONF=/dev/null: the broken config must not break the check.
     if OPENSSL_CONF=/dev/null "$OSSL" fipsinstall -provider_name fips \
            -module "$module" -in "$SSLDIR/fipsmodule.cnf" -verify; then
         echo "stream $STREAM: fipsmodule.cnf matches FIPS module $ver."

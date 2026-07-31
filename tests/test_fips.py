@@ -1,17 +1,11 @@
-"""FIPS provider tests: install a stream + the FIPS module + the helper in a
-clean container, activate FIPS with `openssl-fips-enable`, and check that the
-module loads under the stream's libcrypto and enforces approved-only crypto.
+"""FIPS provider tests: install a stream plus a FIPS module, activate it with
+`openssl-fips-enable`, and check the module loads under the stream's libcrypto
+and enforces approved-only crypto. Also where cross-major loading (a 3.x module
+under 4.x libcrypto) is exercised.
 
-This is where cross-major loading (a 3.x-validated module under a 4.x
-libcrypto) is exercised empirically.
-
-Parametrized over the WHOLE release matrix, not just the two releases the module
-is built on. One module build serves a whole family, so every release is a
-separate claim: the module links libc.so.6 and inherits a glibc symbol-version
-floor from its builder, so a module built on too new a release is simply
-uninstallable on the older ones. Testing only the build platforms cannot see that
-— it is how a module needing GLIBC_2.34 shipped while bullseye and focal (2.31)
-could not install it.
+Parametrized over the WHOLE matrix, not just the releases the module is built
+on: one build serves a family, and its glibc symbol-version floor makes every
+release a separate installability claim.
 """
 import glob
 import os
@@ -311,25 +305,12 @@ def test_module_elf_properties(fips_target):
 
 
 def test_module_carries_the_distribution_link_flags(fips_target):
-    """The two families currently build the module with DIFFERENT link flags.
+    """The module should get the distribution's link flags, as it does on rpm via
+    %set_build_flags. On deb it does not: overriding dh_auto_configure bypasses
+    where debhelper would supply dpkg-buildflags, so the link gets no LDFLAGS.
 
-    The design is that the module is compiled with whatever the packaging tools
-    normally provide, on both families — the Security Policy prescribes a command
-    (`./Configure enable-fips`), not an environment, so neither stripping nor
-    adding to the environment is warranted. On rpm that is what happens:
-    %set_build_flags exports the distribution's LDFLAGS and the module comes out
-    with BIND_NOW.
-
-    On deb it does not. packaging/deb-fips/debian/rules overrides
-    dh_auto_configure with a bare `./Configure enable-fips`, which bypasses the
-    point where debhelper would otherwise supply dpkg-buildflags, so no LDFLAGS
-    reach the link and the module has no BIND_NOW. The deb analogue of
-    %set_build_flags would be to export CFLAGS/CPPFLAGS/LDFLAGS from
-    dpkg-buildflags in those rules, leaving the Configure command untouched.
-
-    The deb case xfails only while the flag is genuinely absent, not merely
-    because it is deb: once those rules export dpkg-buildflags this starts
-    passing normally instead of reporting a stale expected failure.
+    Xfails only while the flag is genuinely absent, so fixing those rules makes
+    this pass rather than leaving a stale expected failure.
     """
     t = fips_target
     dyn = t.out(f"readelf -dW /opt/openssl/fips/{FIPS_VERSION}/fips.so")

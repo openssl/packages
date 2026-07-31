@@ -1,14 +1,9 @@
 """ELF hardening and package metadata for the installed stream.
 
-The build asks each distribution for its own hardened flags — `hardening=+all`
-via dpkg-buildflags on deb, %{optflags}/%{build_ldflags} on rpm — rather than
-hard-coding a flag list. These tests assert the properties that survive into the
-shipped objects, so a packaging change that quietly drops them fails here.
-
-The FIPS provider module is deliberately exempt and is checked separately: it is
-built with the bare `./Configure enable-fips` from its Security Policy, with no
-distribution flags, so it has no BIND_NOW. Asserting otherwise would be
-asserting a deviation from the validated build.
+The build asks each distribution for its own hardened flags rather than
+hard-coding a list; these tests assert the properties that survive into the
+shipped objects. The FIPS module is exempt and checked in test_fips.py: it is
+built with the bare Security Policy command, so it has no BIND_NOW.
 """
 import pytest
 

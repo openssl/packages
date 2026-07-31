@@ -1,12 +1,9 @@
 #!/bin/sh
 set -e
 
-# Re-activate this module for any stream that has it enabled. The stream's
-# fipsmodule.cnf holds an integrity MAC over the module bytes; after an upgrade
-# replaces them the MAC is stale and the FIPS provider refuses to load, so the
-# re-run of fipsinstall (module self-tests included) must happen here, not be
-# left for the administrator to discover. A failure is reported loudly but does
-# not fail the install: a broken dpkg state helps nobody.
+# An upgrade replaces the module bytes, staling the MAC in each stream's
+# fipsmodule.cnf, so re-activate every stream that has this module enabled.
+# A failure is reported loudly but does not fail the install.
 if [ "$1" = "configure" ]; then
     for enabled in /etc/opt/openssl/*/fips-enabled; do
         [ -r "$enabled" ] || continue

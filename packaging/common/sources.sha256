@@ -1,11 +1,8 @@
 # Pinned SHA-256 of every upstream source tarball we build, in sha256sum(1)
 # format. verify-source.sh refuses to build a version that is not listed here.
 #
-# The pin is what makes a build reproducible and what protects us if an upstream
-# artifact is ever replaced in place; the detached signature checked alongside it
-# is what establishes authenticity. Record a new pin only after verifying the
-# tarball's signature, so the value inherits that authority instead of recording
-# whatever the download server happened to serve.
+# Record a new pin only after verifying that release's signature, so the value
+# inherits its authority:
 #
 #   curl -fsSLO https://github.com/openssl/openssl/releases/download/openssl-<V>/openssl-<V>.tar.gz
 #   curl -fsSLO https://github.com/openssl/openssl/releases/download/openssl-<V>/openssl-<V>.tar.gz.asc

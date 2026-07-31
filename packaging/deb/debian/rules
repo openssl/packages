@@ -4,11 +4,8 @@
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
-# Build parallelism. dpkg-buildpackage only puts -j into MAKEFLAGS when it is
-# forced with -J, so overriding dh_auto_build with a bare $(MAKE) builds
-# serially however DEB_BUILD_OPTIONS is set — the -j below is what actually
-# parallelises the OpenSSL build. JOBS comes from the environment
-# (build/build-deb.sh passes it through) so CI can pin it.
+# dpkg-buildpackage only puts -j into MAKEFLAGS when forced with -J, so the
+# explicit -j below is what actually parallelises the build.
 JOBS ?= $(shell nproc)
 export DEB_BUILD_OPTIONS ?= parallel=$(JOBS)
 
@@ -77,12 +74,8 @@ override_dh_missing:
 # Private /opt libraries.
 override_dh_makeshlibs:
 
-# Resolve our own libs from the staged tree so only external deps (libc) remain.
-# --ignore-missing-info: our libraries are private to this package and we
-# deliberately generate no shlibs for them (see override_dh_makeshlibs), so
-# dpkg-shlibdeps has no package mapping for them. Required since the provider
-# modules lost their RUNPATH (module_ldflags is empty in the variant target),
-# which is what previously let it resolve them.
+# Resolve our own libs from the staged tree so only external deps remain.
+# --ignore-missing-info: they are private, so we generate no shlibs for them.
 override_dh_shlibdeps:
 	dh_shlibdeps -- -l$(TMP)$(PREFIX)/lib64 --ignore-missing-info
 

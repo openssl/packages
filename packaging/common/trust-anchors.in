@@ -7,18 +7,13 @@
 #   openssl-trust-anchors none     # stream-private, initially empty trust store
 #   openssl-trust-anchors apply    # re-apply the recorded policy (used by postinst/%post)
 #
-# Policy precedence:
-#   1. USE_SYSTEM_TRUST_ANCHORS in the environment — this is how you choose at
-#      INSTALL time, identically on both package families:
-#           USE_SYSTEM_TRUST_ANCHORS=no apt install openssl@STREAM@-upstream
-#           USE_SYSTEM_TRUST_ANCHORS=no dnf install openssl@STREAM@-upstream
-#      (the choice is recorded, so upgrades keep it)
-#   2. the recorded choice in /etc/opt/openssl/@STREAM@/trust.conf
-#   3. the default: use the system CA trust anchors
+# Precedence: USE_SYSTEM_TRUST_ANCHORS in the environment (how you choose at
+# install time, on both families; the choice is recorded so upgrades keep it),
+# then trust.conf, then the default of using the system anchors.
 #
 # With "none", nothing is trusted until you add anchors to
-# /etc/opt/openssl/@STREAM@/certs (then run `openssl rehash` on it) or point
-# applications at their own store via SSL_CERT_FILE / SSL_CERT_DIR.
+# /etc/opt/openssl/@STREAM@/certs and `openssl rehash` it, or point applications
+# at SSL_CERT_FILE / SSL_CERT_DIR.
 set -eu
 
 STREAM="@STREAM@"

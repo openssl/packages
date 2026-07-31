@@ -3,18 +3,9 @@
 #
 #   verify-source.sh <tarball> <detached-signature>
 #
-# Two independent checks, both fatal:
-#
-#   1. the SHA-256 pinned in sources.sha256 in this repository. A version with no
-#      pin is an error, not a pass — otherwise adding a stream would silently opt
-#      out of verification.
-#   2. the upstream detached signature, against the release certificates in
-#      openssl-release-keys.asc beside this script. The keyring is the allowlist:
-#      it holds only OpenSSL's own release keys, so any signature it validates is
-#      one we accept. No keyserver and no Web Key Directory is consulted — WKD
-#      publishes only the current key for an address, while released tarballs stay
-#      signed by whichever key was current when they were made (3.1.2 is signed by
-#      a 2014 key and will be forever, being frozen validated FIPS source).
+# Two fatal checks: the SHA-256 pinned in sources.sha256, then the upstream
+# signature against openssl-release-keys.asc beside this script. That keyring is
+# the allowlist; no keyserver or WKD is consulted.
 set -eu
 
 TARBALL="${1:?usage: verify-source.sh <tarball> <signature>}"
@@ -37,6 +28,7 @@ die() {
 
 # ---- 1. pinned checksum ----------------------------------------------------
 
+# An unpinned version is an error, not a pass.
 pin=$(grep -v '^[[:space:]]*#' "$PINS" | grep "[[:space:]]$NAME\$" || :)
 [ -n "$pin" ] || die "no pinned SHA-256 for $NAME in $PINS. Verify the upstream
 signature by hand, then add the checksum (see the header of that file)."
@@ -60,8 +52,7 @@ trap cleanup EXIT
 gpg --batch --quiet --import "$KEYRING" \
     || die "could not import $KEYRING"
 
-# --status-fd is the authority here, not the exit status: require an explicit
-# VALIDSIG from a certificate in our keyring.
+# VALIDSIG from --status-fd is the authority, not gpg's exit status.
 status="$GNUPGHOME/status"
 gpg --batch --status-fd 3 --verify "$SIGNATURE" "$TARBALL" 3>"$status" >/dev/null 2>&1 || :
 
