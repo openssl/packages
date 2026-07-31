@@ -6,6 +6,8 @@ set -euo pipefail
 
 FIPSVER="${FIPSVER:?set FIPSVER, e.g. 3.1.2}"
 REVISION="${REVISION:-1}"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(date +%s)}"
+export SOURCE_DATE_EPOCH
 CODENAME="${CODENAME:-bookworm}"
 SRCREPO=/src
 OUT=/out
@@ -40,7 +42,7 @@ tar xf "$tarball"
 cd "openssl-${FIPSVER}"
 
 cp -r "$SRCREPO/packaging/deb-fips/debian" debian
-date_r="$(date -R)"
+date_r="$(date -R -u -d "@$SOURCE_DATE_EPOCH")"
 subst() { sed -e "s/@FIPSVER@/${FIPSVER}/g" -e "s/@CODENAME@/${CODENAME}/g" \
               -e "s/@REVISION@/${REVISION}/g" \
               -e "s/@FIPSPKG@/${PKG}/g" -e "s/@MODDIR@/${MODDIR}/g" \

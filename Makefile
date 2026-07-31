@@ -21,6 +21,11 @@ export ARCH
 REVISION ?= 1
 export REVISION
 
+# Timestamp for the changelogs, from the source rather than the clock: dpkg and
+# rpm both derive SOURCE_DATE_EPOCH from the changelog date.
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
+export SOURCE_DATE_EPOCH
+
 # OpenSSL's build parallelism inside each container. Pin it where memory per
 # core is tight: LTO link jobs multiply against it.
 JOBS ?= $(shell nproc)

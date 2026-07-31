@@ -28,6 +28,7 @@ podman run --rm --platform "linux/${ARCH}" \
     -e FIPSVER="$FIPSVER" -e CODENAME="$SUITE" -e FIPS_CERT="${FIPS_CERT:-}" \
     -e FIPS_STREAM="${FIPS_STREAM:-}" \
     -e JOBS="${JOBS:-}" -e REVISION="${REVISION:-1}" \
+    -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-}" \
     "$IMAGE" \
     bash /src/packaging/deb-fips/build-in-container.sh
 

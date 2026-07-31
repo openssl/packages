@@ -6,6 +6,8 @@ set -euo pipefail
 STREAM="${STREAM:?set STREAM, e.g. 4.0}"
 VERSION="${VERSION:?set VERSION, e.g. 4.0.1}"
 REVISION="${REVISION:-1}"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(date +%s)}"
+export SOURCE_DATE_EPOCH
 CODENAME="${CODENAME:-bookworm}"
 SRCREPO=/src
 OUT=/out
@@ -32,7 +34,7 @@ cp "$SRCREPO/packaging/common/setup-shlib-variant.sh" setup-shlib-variant.sh
 cp "$SRCREPO/packaging/common/variant-target.conf.in" variant-target.conf.in
 cp "$SRCREPO/packaging/common/openssl-fips.cnf.in" openssl-fips.cnf.in
 PKG="openssl${STREAM}-upstream"
-date_r="$(date -R)"
+date_r="$(date -R -u -d "@$SOURCE_DATE_EPOCH")"
 subst() {
     sed -e "s|@STREAM@|${STREAM}|g" \
         -e "s|@PREFIX@|/opt/openssl/${STREAM}|g" \

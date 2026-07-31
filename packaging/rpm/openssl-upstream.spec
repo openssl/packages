@@ -4,6 +4,7 @@
 
 %global stream      %{?stream}%{!?stream:4.0}
 %global revision    %{?revision}%{!?revision:1}
+%global changelog_date %{?changelog_date}%{!?changelog_date:Tue Jul 21 2026}
 %global prefix      /opt/openssl/%{stream}
 %global etcparent   /etc/opt/openssl
 %global ssldir      %{etcparent}/%{stream}
@@ -159,5 +160,5 @@ fi
 %{prefix}/share/doc
 
 %changelog
-* Tue Jul 21 2026 OpenSSL Packages <openssl-packages@openssl.org> - %{version}-%{revision}
+* %{changelog_date} OpenSSL Packages <openssl-packages@openssl.org> - %{version}-%{revision}
 - Upstream OpenSSL %{version}, packaged for /opt.

@@ -5,6 +5,7 @@
 
 %global fipsver   %{?fipsver}%{!?fipsver:3.1.2}
 %global revision  %{?revision}%{!?revision:1}
+%global changelog_date %{?changelog_date}%{!?changelog_date:Tue Jul 21 2026}
 %global moddir    %{?fips_stream}%{!?fips_stream:%{fipsver}}
 %global pkgname   %{?fips_stream:openssl%{fips_stream}-upstream-fips}%{!?fips_stream:openssl-fips%{fipsver}-upstream}
 %global fipsroot  /opt/openssl/fips/%{moddir}
@@ -100,5 +101,5 @@ done
 
 
 %changelog
-* Tue Jul 21 2026 OpenSSL Packages <openssl-packages@openssl.org> - %{fipsver}-%{revision}
+* %{changelog_date} OpenSSL Packages <openssl-packages@openssl.org> - %{fipsver}-%{revision}
 - OpenSSL FIPS provider %{fipsver}, packaged for /opt.

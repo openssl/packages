@@ -6,6 +6,9 @@ set -euo pipefail
 STREAM="${STREAM:?set STREAM, e.g. 4.0}"
 VERSION="${VERSION:?set VERSION, e.g. 4.0.1}"
 REVISION="${REVISION:-1}"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(date +%s)}"
+export SOURCE_DATE_EPOCH
+CHANGELOG_DATE="$(LC_ALL=C date -u -d "@$SOURCE_DATE_EPOCH" "+%a %b %d %Y")"
 SRCREPO=/src
 OUT=/out
 
@@ -45,6 +48,7 @@ rpmbuild -bb \
     --define "stream ${STREAM}" \
     --define "version ${VERSION}" \
     --define "revision ${REVISION}" \
+    --define "changelog_date ${CHANGELOG_DATE}" \
     "${RT[@]}" "${JB[@]}" \
     "$topdir/SPECS/openssl-upstream.spec"
 

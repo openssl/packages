@@ -4,6 +4,9 @@ set -euo pipefail
 
 FIPSVER="${FIPSVER:?set FIPSVER, e.g. 3.1.2}"
 REVISION="${REVISION:-1}"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(date +%s)}"
+export SOURCE_DATE_EPOCH
+CHANGELOG_DATE="$(LC_ALL=C date -u -d "@$SOURCE_DATE_EPOCH" "+%a %b %d %Y")"
 SRCREPO=/src
 OUT=/out
 
@@ -42,7 +45,8 @@ FS=()
 # Pin %make_build's -j; see packaging/rpm/build-in-container.sh.
 JB=()
 [ -n "${JOBS:-}" ] && JB=(--define "_smp_build_ncpus ${JOBS}")
-rpmbuild -bb --define "fipsver ${FIPSVER}" --define "revision ${REVISION}" "${FC[@]}" "${FS[@]}" "${JB[@]}" \
+rpmbuild -bb --define "fipsver ${FIPSVER}" --define "revision ${REVISION}" \
+    --define "changelog_date ${CHANGELOG_DATE}" "${FC[@]}" "${FS[@]}" "${JB[@]}" \
     "$topdir/SPECS/openssl-fips-upstream.spec"
 
 echo ">> collect artifacts"
