@@ -162,3 +162,4 @@ fi
 %changelog
 * %{changelog_date} OpenSSL Packages <openssl-packages@openssl.org> - %{version}-%{revision}
 - Upstream OpenSSL %{version}, packaged for /opt.
+- Packaging changes: https://github.com/openssl/packages/blob/main/CHANGELOG.md

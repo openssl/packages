@@ -1,5 +1,6 @@
 openssl@STREAM@-upstream (@VERSION@-@REVISION@) @CODENAME@; urgency=medium
 
-  * Upstream OpenSSL @VERSION@, packaged for /opt.
+  * Upstream OpenSSL @VERSION@, packaged for /opt. Packaging changes:
+    https://github.com/openssl/packages/blob/main/CHANGELOG.md
 
  -- OpenSSL Packages <openssl-packages@openssl.org>  @DATE@
