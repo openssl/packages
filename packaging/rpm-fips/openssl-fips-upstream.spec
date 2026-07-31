@@ -1,28 +1,24 @@
-# FIPS provider module, built in one of two modes:
-#   --define "fipsver X.Y.Z"                      pinned validated version,
-#     [--define "fips_cert <number>"]             openssl-fips<X.Y.Z>-upstream
-#   --define "fipsver X.Y.Z" --define "fips_stream X.Y"
-#     the stream's companion module, openssl<X.Y>-upstream-fips, NOT validated,
-#     upgrades with the stream.
-# Configured with `enable-fips` and no other OpenSSL options, per the module
-# Security Policy.
+# FIPS provider module. Two modes:
+#   --define "fipsver X.Y.Z" [--define "fips_cert N"]  pinned validated version
+#   --define "fipsver X.Y.Z" --define "fips_stream X.Y"  stream companion
+# Configured with `enable-fips` and nothing else, per the Security Policy.
 
 %global fipsver   %{?fipsver}%{!?fipsver:3.1.2}
+%global revision  %{?revision}%{!?revision:1}
 %global moddir    %{?fips_stream}%{!?fips_stream:%{fipsver}}
 %global pkgname   %{?fips_stream:openssl%{fips_stream}-upstream-fips}%{!?fips_stream:openssl-fips%{fipsver}-upstream}
 %global fipsroot  /opt/openssl/fips/%{moddir}
 %global _buildhost reproducible.openssl.local
 %global __provides_exclude_from ^/opt/openssl/
 
-# A certificate belongs to a pinned version; a stream companion cannot carry
-# one, or an upgrade would silently change certified bytes.
+# A companion cannot carry a certificate: an upgrade would change certified bytes.
 %if "%{?fips_stream}" != "" && "%{?fips_cert}" != ""
 %{error:fips_stream and fips_cert are mutually exclusive}
 %endif
 
 Name:           %{pkgname}
 Version:        %{fipsver}
-Release:        1%{?dist}
+Release:        %{revision}%{?dist}
 Summary:        OpenSSL FIPS provider %{fipsver} (upstream%{?fips_stream:, %{fips_stream} stream companion, not validated})
 License:        Apache-2.0
 URL:            https://openssl-library.org
@@ -52,40 +48,30 @@ This version is pinned: the package never moves to a different source release.
 %autosetup -n openssl-%{fipsver}
 
 %build
-# Exact build command from the module Security Policy (3.1.2, cert #4985) §11.1,
-# Crypto Officer Guidance / Installation, step 1: `./Configure enable-fips` then
-# `make`. The Security Policy prescribes a command, not an environment, so the
-# build environment is the platform's normal one for a package build: this spec
-# would otherwise be an anomaly, because rpmbuild does not export its %%optflags
-# into %%build automatically, and Configure absorbs CFLAGS/LDFLAGS from the
-# environment. Validation is source-based and the source is unmodified; the
-# integrity MAC is computed over whatever bytes result.
+# The Security Policy's exact command (3.1.2 cert #4985, §11.1 step 1). The SP
+# prescribes a command, not an environment, so %%set_build_flags gives this
+# build the platform's normal package-build flags like every other spec.
 %set_build_flags
 ./Configure enable-fips
-# providers/fips.so is MODULES{fips}, so build_modules is what produces it. The
-# default target also builds the test programs, which this package does not ship;
-# skipping them leaves fips.so byte-identical.
+# providers/fips.so is MODULES{fips}. Skipping the test programs the default
+# target would also build leaves fips.so byte-identical.
 %make_build build_modules
 
 %install
 install -Dm755 providers/fips.so %{buildroot}%{fipsroot}/fips.so
-# A 'validated' marker records the NIST CMVP certificate for source versions
-# that hold one; openssl-fips-enable reports it. Absent => not validated.
+# Records the CMVP certificate; absent means not NIST-validated.
 %if "%{?fips_cert}" != ""
 echo "NIST CMVP certificate #%{fips_cert}" > %{buildroot}%{fipsroot}/validated
 %endif
-# A stream companion's directory is named after the stream, so the source
-# version it was built from is recorded beside it for the helper to report.
+# The companion's dir is the stream, so record the source version beside it.
 %if "%{?fips_stream}" != ""
 echo "%{fipsver}" > %{buildroot}%{fipsroot}/version
 %endif
 
 %post
-# Re-activate this module for any stream that has it enabled. The stream's
-# fipsmodule.cnf holds an integrity MAC over the module bytes; after an upgrade
-# replaces them the MAC is stale and the FIPS provider refuses to load, so the
-# re-run of fipsinstall (module self-tests included) must happen here. A failure
-# is reported loudly but does not fail the install.
+# An upgrade replaces the module bytes, staling the MAC in each stream's
+# fipsmodule.cnf, so re-activate every stream that has this module enabled.
+# A failure is reported loudly but does not fail the install.
 for enabled in /etc/opt/openssl/*/fips-enabled; do
     [ -r "$enabled" ] || continue
     [ "$(cat "$enabled")" = "%{moddir}" ] || continue
@@ -114,5 +100,5 @@ done
 
 
 %changelog
-* Tue Jul 21 2026 OpenSSL Packages <openssl-packages@openssl.org> - %{fipsver}-1
+* Tue Jul 21 2026 OpenSSL Packages <openssl-packages@openssl.org> - %{fipsver}-%{revision}
 - OpenSSL FIPS provider %{fipsver} packaged for /opt (proof-of-concept build).

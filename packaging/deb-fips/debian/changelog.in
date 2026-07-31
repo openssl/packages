@@ -1,4 +1,4 @@
-@FIPSPKG@ (@FIPSVER@-1) @CODENAME@; urgency=medium
+@FIPSPKG@ (@FIPSVER@-@REVISION@) @CODENAME@; urgency=medium
 
   * OpenSSL FIPS provider @FIPSVER@ packaged for /opt (proof-of-concept build).
 

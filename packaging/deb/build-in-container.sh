@@ -5,6 +5,7 @@ set -euo pipefail
 
 STREAM="${STREAM:?set STREAM, e.g. 4.0}"
 VERSION="${VERSION:?set VERSION, e.g. 4.0.1}"
+REVISION="${REVISION:-1}"
 CODENAME="${CODENAME:-bookworm}"
 SRCREPO=/src
 OUT=/out
@@ -36,6 +37,7 @@ subst() {
     sed -e "s|@STREAM@|${STREAM}|g" \
         -e "s|@PREFIX@|/opt/openssl/${STREAM}|g" \
         -e "s|@VERSION@|${VERSION}|g" \
+        -e "s|@REVISION@|${REVISION}|g" \
         -e "s|@CODENAME@|${CODENAME}|g" \
         -e "s|@DATE@|${date_r}|g" "$1"
 }

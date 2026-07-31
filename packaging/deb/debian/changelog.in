@@ -1,4 +1,4 @@
-openssl@STREAM@-upstream (@VERSION@-1) @CODENAME@; urgency=medium
+openssl@STREAM@-upstream (@VERSION@-@REVISION@) @CODENAME@; urgency=medium
 
   * Upstream OpenSSL @VERSION@, packaged for /opt (proof-of-concept build).
 

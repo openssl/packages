@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Build the FIPS module .rpms. One build serves every EL release, so the builder
-# must be the OLDEST glibc we target — el9 (2.34) — because the module inherits a
-# glibc symbol-version floor from its builder and glibc is compatible only
-# forwards. Building on el10 (2.39) would leave the package uninstallable on el9.
+# Build the FIPS module .rpms. One build serves every EL release, so the
+# builder must be the OLDEST glibc we target — el9.
 #
 #   build/build-fips-rpm.sh [FIPSVER] [EL] [IMAGE]
 set -euo pipefail
@@ -29,6 +27,7 @@ podman run --rm --platform "linux/${ARCH}" \
     -v "$OUT":/out \
     -e FIPSVER="$FIPSVER" -e FIPS_CERT="${FIPS_CERT:-}" \
     -e FIPS_STREAM="${FIPS_STREAM:-}" -e JOBS="${JOBS:-}" \
+    -e REVISION="${REVISION:-1}" \
     "$IMAGE" \
     bash /src/packaging/rpm-fips/build-in-container.sh
 

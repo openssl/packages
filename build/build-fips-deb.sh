@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Build the FIPS module .debs. The fips.so links only libc, so one build serves
-# every deb release — but it inherits a glibc symbol-version floor from whatever
-# built it, and glibc is compatible only forwards. The builder must therefore be
-# the OLDEST glibc we target: bullseye and focal are both 2.31, and a module
-# built on bookworm (2.36) needs GLIBC_2.34 and will not install on either.
+# Build the FIPS module .debs. One build serves every deb release, so the
+# builder must be the OLDEST glibc we target.
 #
 #   build/build-fips-deb.sh [FIPSVER] [SUITE] [IMAGE]
 set -euo pipefail
@@ -30,7 +27,7 @@ podman run --rm --platform "linux/${ARCH}" \
     -v "$OUT":/out \
     -e FIPSVER="$FIPSVER" -e CODENAME="$SUITE" -e FIPS_CERT="${FIPS_CERT:-}" \
     -e FIPS_STREAM="${FIPS_STREAM:-}" \
-    -e JOBS="${JOBS:-}" \
+    -e JOBS="${JOBS:-}" -e REVISION="${REVISION:-1}" \
     "$IMAGE" \
     bash /src/packaging/deb-fips/build-in-container.sh
 

@@ -3,6 +3,7 @@
 # source, default configuration, installed under /opt.
 
 %global stream      %{?stream}%{!?stream:4.0}
+%global revision    %{?revision}%{!?revision:1}
 %global prefix      /opt/openssl/%{stream}
 %global etcparent   /etc/opt/openssl
 %global ssldir      %{etcparent}/%{stream}
@@ -10,17 +11,14 @@
 # Do not leak the (possibly foreign) build host into signed artifacts.
 %global _buildhost  reproducible.openssl.local
 
-# Isolation: never advertise our private libraries to the resolver, and do not
-# turn our own intra-package SONAME links into unmet external Requires. The
-# pattern matches both the stock and the '-upstream' variant SONAMEs; we
-# self-contain libssl/libcrypto, so needing no external libssl/libcrypto is
-# correct. libc etc. are kept.
+# Never advertise our private libraries, and never turn our own intra-package
+# SONAME links into unmet external Requires. libc etc. are kept.
 %global __provides_exclude_from ^%{prefix}/.*$
 %global __requires_exclude ^lib(ssl|crypto).*\\.so
 
 Name:           openssl%{stream}-upstream
 Version:        %{version}
-Release:        1%{?dist}
+Release:        %{revision}%{?dist}
 Summary:        OpenSSL %{stream} upstream build (installed under /opt)
 License:        Apache-2.0
 URL:            https://openssl-library.org
@@ -55,10 +53,8 @@ symlinks, API/guide man pages and the source demos for OpenSSL %{stream}.
 %autosetup -n openssl-%{version}
 
 %build
-# Default configuration; only the /opt layout args plus the distro's hardened
-# build flags (%%{optflags}/%%{build_ldflags}). The synthesised '-upstream'
-# target carries shlib_variant (distinct SONAME + symbol versions) and the
-# RUNPATH flags for libraries and apps.
+# Default configuration: only the /opt layout args plus the distro's hardened
+# flags. The synthesised '-upstream' target carries shlib_variant and RUNPATH.
 cp %{SOURCE1} setup-shlib-variant.sh
 # setup-shlib-variant.sh reads the target template from alongside itself.
 cp %{SOURCE4} variant-target.conf.in
@@ -83,10 +79,8 @@ make test
 %endif
 
 %install
-# Explicit make, NOT %%make_install: that macro is `make install ...`, and the
-# bare `install` target drags in install_docs -> install_html_docs, building and
-# staging the whole HTML manual we do not ship. The deb rules call the same
-# three targets explicitly.
+# NOT %%make_install: that runs the bare `install` target too, which drags in
+# install_html_docs and stages an HTML manual we do not ship.
 make DESTDIR=%{buildroot} install_sw install_ssldirs install_man_docs
 
 # Per-stream enable/deactivate script (interactive convenience).
@@ -121,10 +115,8 @@ rm -rf %{buildroot}%{ssldir}/certs
 export QA_RPATHS=0x0002
 
 %post
-# Apply the recorded trust-anchor policy (defaults to using the system CA
-# anchors; pre-create /etc/opt/openssl/trust.conf with
-# USE_SYSTEM_TRUST_ANCHORS=no before installing to opt out). rpm cannot prompt
-# — the config file is the install-time interface. See openssl-trust-anchors.
+# Apply the recorded trust-anchor policy; rpm cannot prompt, so trust.conf or
+# USE_SYSTEM_TRUST_ANCHORS is the install-time interface.
 %{prefix}/bin/openssl-trust-anchors apply || :
 
 %postun
@@ -167,5 +159,5 @@ fi
 %{prefix}/share/doc
 
 %changelog
-* Tue Jul 21 2026 OpenSSL Packages <openssl-packages@openssl.org> - %{version}-1
+* Tue Jul 21 2026 OpenSSL Packages <openssl-packages@openssl.org> - %{version}-%{revision}
 - Upstream OpenSSL %{version}, packaged for /opt (proof-of-concept build).

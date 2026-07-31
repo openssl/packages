@@ -16,11 +16,13 @@ VERSION ?= 4.0.1
 ARCH ?= amd64
 export ARCH
 
-# Parallelism for OpenSSL's own build inside each container, passed through to
-# `make -j` on deb and to rpm's %{_smp_build_ncpus} on rpm. Defaults to the
-# container's visible CPU count; pin it (JOBS=4) where memory per core is tight,
-# which is why CI sets it explicitly — EL's %{optflags} include -flto=auto, and
-# LTO link jobs multiply against this number.
+# The '-N' after the upstream version; bumped to republish the same upstream
+# version with different packaging.
+REVISION ?= 1
+export REVISION
+
+# OpenSSL's build parallelism inside each container. Pin it where memory per
+# core is tight: LTO link jobs multiply against it.
 JOBS ?= $(shell nproc)
 export JOBS
 
@@ -33,13 +35,8 @@ export RUN_TESTS
 PYTEST      ?= uv run pytest
 PYTEST_ARGS ?= -v
 
-# FIPS provider modules, two kinds with different lifecycles:
-#   validated  openssl-fips<X.Y.Z>-upstream at /opt/openssl/fips/<X.Y.Z>/ —
-#              pinned per NIST-validated source version, published once, never
-#              changes. CERT_<version> names the CMVP certificate.
-#   companion  openssl<X.Y>-upstream-fips at /opt/openssl/fips/<X.Y>/ — built
-#              from the stream's current source ($(VERSION)), NOT validated,
-#              upgrades in step with the stream.
+# Validated modules are pinned per source version; CERT_<version> names its
+# CMVP certificate. The stream's companion module is built from $(VERSION).
 FIPS_VALIDATED ?= 3.1.2
 CERT_3.1.2      = 4985
 
@@ -47,11 +44,8 @@ CERT_3.1.2      = 4985
 FIPS_VERSION ?= 3.1.2
 export FIPS_VERSION
 
-# One module build serves a whole family, so it must be built on the release with
-# the OLDEST glibc in that family: the module links libc.so.6 and picks up a
-# symbol-version floor from its builder, and glibc is only compatible forwards.
-# Built on bookworm it required GLIBC_2.34 and would not install on bullseye or
-# focal (both 2.31). el9 is already the oldest EL we target.
+# One module build serves a whole family, so build it on the OLDEST glibc in
+# that family: the module inherits a symbol-version floor from its builder.
 FIPS_DEB_SUITE ?= bullseye
 FIPS_EL_VER    ?= 9
 

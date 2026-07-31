@@ -5,6 +5,7 @@ set -euo pipefail
 
 STREAM="${STREAM:?set STREAM, e.g. 4.0}"
 VERSION="${VERSION:?set VERSION, e.g. 4.0.1}"
+REVISION="${REVISION:-1}"
 SRCREPO=/src
 OUT=/out
 
@@ -36,14 +37,14 @@ cp "$SRCREPO/packaging/common/openssl-fips.cnf.in" "$topdir/SOURCES/"
 echo ">> rpmbuild (RUN_TESTS=${RUN_TESTS:-0}, JOBS=${JOBS:-auto})"
 RT=()
 [ "${RUN_TESTS:-0}" = 1 ] && RT=(--define "run_tests 1")
-# Pin %make_build's -j. Left at rpm's own CPU detection when JOBS is unset;
-# %{_smp_build_ncpus} is what both %{_smp_mflags} and RPM_BUILD_NCPUS derive
-# from, on EL9 (literal -jN) and EL10 (-j${RPM_BUILD_NCPUS}) alike.
+# Pin %make_build's -j; %{_smp_build_ncpus} is what it derives from on EL9 and
+# EL10 alike. Left at rpm's own detection when JOBS is unset.
 JB=()
 [ -n "${JOBS:-}" ] && JB=(--define "_smp_build_ncpus ${JOBS}")
 rpmbuild -bb \
     --define "stream ${STREAM}" \
     --define "version ${VERSION}" \
+    --define "revision ${REVISION}" \
     "${RT[@]}" "${JB[@]}" \
     "$topdir/SPECS/openssl-upstream.spec"
 
