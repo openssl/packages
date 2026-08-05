@@ -82,6 +82,12 @@ def built_streams():
     return sorted(found, key=lambda s: [int(x) for x in s.split(".")], reverse=True)
 
 
+# A mirror address with a broken path stalls the fetch, and apt's own timeout
+# does not fire once the connection half-closes; retries redraw an address.
+APT_OPTS = "-o Acquire::http::Timeout=30 -o Acquire::Retries=3"
+DNF_OPTS = "--setopt=timeout=30 --setopt=retries=10"
+
+
 def _install_script(fam):
     # The distro's own openssl CLI and development headers are installed
     # deliberately: several tests compare against it to prove coexistence, and
@@ -90,18 +96,41 @@ def _install_script(fam):
     # update-ca-* tools the trust-anchor tests drive.
     if fam == "deb":
         return (
-            "set -e; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null; "
-            "apt-get install -y --no-install-recommends binutils gcc libc6-dev pkg-config "
+            f"set -e; export DEBIAN_FRONTEND=noninteractive;"
+            f" apt-get {APT_OPTS} update -qq >/dev/null;"
+            f" apt-get {APT_OPTS} install -y --no-install-recommends"
+            " binutils gcc libc6-dev pkg-config "
             "ca-certificates openssl libssl-dev "
             f"/pkgs/openssl{STREAM}-upstream_*_{DEB_ARCH}.deb "
             f"/pkgs/openssl{STREAM}-upstream-dev_*_{DEB_ARCH}.deb "
             ">/dev/null 2>&1"
         )
     return (
-        "set -e; dnf install -y -q binutils gcc glibc-devel pkgconf-pkg-config "
+        f"set -e; dnf install -y -q {DNF_OPTS} binutils gcc glibc-devel pkgconf-pkg-config "
         "ca-certificates openssl openssl-devel "
         f"/pkgs/openssl{STREAM}-upstream-*.{RPM_ARCH}.rpm >/dev/null 2>&1"
     )
+
+
+# Every podman call is bounded. Without this an unreachable package mirror hangs
+# the whole run: apt can sit in CLOSE-WAIT indefinitely, and its own
+# Acquire::http::Timeout does not fire in that state.
+EXEC_TIMEOUT = 900        # a command inside a container; slowest is a gcc build
+INSTALL_TIMEOUT = 600     # apt/dnf install, which needs the network
+START_TIMEOUT = 600       # podman run, which may pull the image
+RM_TIMEOUT = 120
+INSTALL_ATTEMPTS = 3      # see install_packages()
+
+
+def _run(argv, timeout, what, check=False):
+    """Run a podman command, turning a hang into a failure that names itself."""
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise AssertionError(f"timed out after {timeout}s: {what}")
+    if check and r.returncode != 0:
+        raise AssertionError(f"failed ({r.returncode}): {what}\n{r.stdout}\n{r.stderr}")
+    return r
 
 
 class Target:
@@ -110,9 +139,8 @@ class Target:
         self.stream = STREAM
         self.prefix = f"/opt/openssl/{STREAM}"
 
-    def run(self, cmd, check=False):
-        r = subprocess.run([PODMAN, "exec", self.cid, "bash", "-c", cmd],
-                           capture_output=True, text=True)
+    def run(self, cmd, check=False, timeout=EXEC_TIMEOUT):
+        r = _run([PODMAN, "exec", self.cid, "bash", "-c", cmd], timeout, cmd)
         if check and r.returncode != 0:
             raise AssertionError(f"cmd failed ({r.returncode}): {cmd}\n{r.stdout}\n{r.stderr}")
         return r
@@ -127,7 +155,37 @@ def start_container(image, mounts):
     for host, dest in mounts.items():
         argv += ["-v", f"{host}:{dest}:ro"]
     argv += [image, "sleep", "infinity"]
-    return subprocess.run(argv, capture_output=True, text=True, check=True).stdout.strip()
+    return _run(argv, START_TIMEOUT, f"podman run {image}", check=True).stdout.strip()
+
+
+def remove_container(cid):
+    _run([PODMAN, "rm", "-f", cid], RM_TIMEOUT, f"podman rm -f {cid[:12]}")
+
+
+def install_packages(image, mounts, script, what):
+    """Start a container and install into it, retrying on a fresh one.
+
+    Returns the container id; the caller owns removing it. Retries because the
+    install is the one step that needs the network: a mirror address with a
+    broken path stalls it, and each attempt draws a new one. A timeout leaves
+    the in-container process running — podman exec only kills its client — so a
+    failed attempt must discard the whole container, not just retry the exec.
+    """
+    last = None
+    for attempt in range(1, INSTALL_ATTEMPTS + 1):
+        cid = start_container(image, mounts)
+        try:
+            r = subprocess.run([PODMAN, "exec", cid, "bash", "-c", script],
+                               capture_output=True, text=True, timeout=INSTALL_TIMEOUT)
+            if r.returncode == 0:
+                return cid
+            last = f"exit {r.returncode}\n{r.stdout}\n{r.stderr}"
+        except subprocess.TimeoutExpired:
+            last = f"timed out after {INSTALL_TIMEOUT}s"
+        remove_container(cid)
+        print(f"\n{what}: install attempt {attempt}/{INSTALL_ATTEMPTS} failed: {last}")
+    raise AssertionError(
+        f"{what}: install failed {INSTALL_ATTEMPTS}x, last: {last}")
 
 
 @pytest.fixture(scope="session",
@@ -140,16 +198,14 @@ def target(request):
     if not _main_pkgs(fam, rel):
         pytest.skip(f"no built packages in {pkgdir(fam, rel)} — build first")
 
-    cid = start_container(image, {pkgdir(fam, rel): "/pkgs", DATADIR: "/testdata"})
+    # The install itself is a test: an unmet libssl.so.N (bad Provides/Requires
+    # filtering) would fail right here.
+    cid = install_packages(image, {pkgdir(fam, rel): "/pkgs", DATADIR: "/testdata"},
+                           _install_script(fam), f"{fam}-{rel}")
     try:
-        # The install itself is a test: an unmet libssl.so.N (bad Provides/Requires
-        # filtering) would fail right here.
-        inst = subprocess.run([PODMAN, "exec", cid, "bash", "-c", _install_script(fam)],
-                              capture_output=True, text=True)
-        assert inst.returncode == 0, f"package install failed:\n{inst.stdout}\n{inst.stderr}"
         yield Target(fam, rel, image, cid)
     finally:
-        subprocess.run([PODMAN, "rm", "-f", cid], capture_output=True)
+        remove_container(cid)
 
 
 # ---- a TLS server the container itself trusts ------------------------------

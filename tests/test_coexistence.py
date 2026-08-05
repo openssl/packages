@@ -10,8 +10,9 @@ import subprocess
 
 import pytest
 
-from conftest import (DATADIR, PODMAN, STREAM, built_streams, pkgdir,
-                      start_container, _main_pkgs)
+from conftest import (DATADIR, PODMAN, STREAM, APT_OPTS, EXEC_TIMEOUT, _run,
+                      built_streams,
+                      install_packages, pkgdir, remove_container, _main_pkgs)
 
 SHA256_ABC = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 
@@ -130,9 +131,8 @@ class StreamPair:
     def __init__(self, cid, a, b):
         self.cid, self.a, self.b = cid, a, b
 
-    def run(self, cmd, check=False):
-        r = subprocess.run([PODMAN, "exec", self.cid, "bash", "-c", cmd],
-                           capture_output=True, text=True)
+    def run(self, cmd, check=False, timeout=EXEC_TIMEOUT):
+        r = _run([PODMAN, "exec", self.cid, "bash", "-c", cmd], timeout, cmd)
         if check and r.returncode != 0:
             raise AssertionError(f"cmd failed ({r.returncode}): {cmd}\n{r.stdout}\n{r.stderr}")
         return r
@@ -161,22 +161,21 @@ def _two_stream_container():
     if not _main_pkgs(fam, rel) or not _main_pkgs(fam, rel, stream=other):
         pytest.skip(f"need {fam}-{rel} packages for both {STREAM} and {other}")
 
-    cid = start_container(image, {pkgdir(fam, rel): "/pkgs",
-                                 pkgdir(fam, rel, other): "/pkgs-other",
-                                 DATADIR: "/testdata"})
     install = (
-        "set -e; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null; "
-        "apt-get install -y --no-install-recommends ca-certificates openssl "
+        f"set -e; export DEBIAN_FRONTEND=noninteractive;"
+            f" apt-get {APT_OPTS} update -qq >/dev/null; "
+        f"apt-get {APT_OPTS} install -y --no-install-recommends ca-certificates openssl "
         f"/pkgs/openssl{STREAM}-upstream_*.deb "
         f"/pkgs-other/openssl{other}-upstream_*.deb >/dev/null 2>&1"
     )
+    cid = install_packages(image, {pkgdir(fam, rel): "/pkgs",
+                                  pkgdir(fam, rel, other): "/pkgs-other",
+                                  DATADIR: "/testdata"},
+                           install, f"streams {STREAM}+{other}")
     try:
-        r = subprocess.run([PODMAN, "exec", cid, "bash", "-c", install],
-                           capture_output=True, text=True)
-        assert r.returncode == 0, f"installing both streams failed:\n{r.stdout}\n{r.stderr}"
         yield StreamPair(cid, STREAM, other)
     finally:
-        subprocess.run([PODMAN, "rm", "-f", cid], capture_output=True)
+        remove_container(cid)
 
 
 @pytest.fixture(scope="module")

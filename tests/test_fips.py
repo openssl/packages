@@ -15,7 +15,9 @@ import subprocess
 import pytest
 
 from conftest import (MATRIX, STREAM, ARCH, DATADIR, DEB_ARCH, RPM_ARCH, REPO,
-                      PODMAN, pkgdir, start_container)
+                      PODMAN, APT_OPTS, DNF_OPTS, EXEC_TIMEOUT, _run,
+                      install_packages, pkgdir,
+                      remove_container, start_container)
 
 FIPS_VERSION = os.environ.get("FIPS_VERSION", "3.1.2")
 
@@ -86,14 +88,15 @@ def _fips_install_script(fam, with_companion):
     companion_rpm = f"/fips-companion/openssl{STREAM}-upstream-fips-[0-9]*.{RPM_ARCH}.rpm"
     if fam == "deb":
         return (
-            "set -e; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null; "
-            "apt-get install -y --no-install-recommends binutils "
+            f"set -e; export DEBIAN_FRONTEND=noninteractive;"
+            f" apt-get {APT_OPTS} update -qq >/dev/null; "
+            f"apt-get {APT_OPTS} install -y --no-install-recommends binutils "
             f"/pkgs/openssl{STREAM}-upstream_*_{DEB_ARCH}.deb "
             f"/fips/openssl-fips{FIPS_VERSION}-upstream_*_{DEB_ARCH}.deb "
             + (companion_deb if with_companion else "") + " >/dev/null 2>&1"
         )
     return (
-        "set -e; dnf install -y -q binutils "
+        f"set -e; dnf install -y -q {DNF_OPTS} binutils "
         f"/pkgs/openssl{STREAM}-upstream-*.{RPM_ARCH}.rpm "
         f"/fips/openssl-fips{FIPS_VERSION}-upstream-*.{RPM_ARCH}.rpm "
         + (companion_rpm if with_companion else "") + " >/dev/null 2>&1"
@@ -109,9 +112,8 @@ class FipsTarget:
         self.ossl = f"{self.prefix}/bin/openssl"
         self.helper = f"{self.prefix}/bin/openssl-fips-enable"
 
-    def run(self, cmd, check=False):
-        r = subprocess.run([PODMAN, "exec", self.cid, "bash", "-c", cmd],
-                           capture_output=True, text=True)
+    def run(self, cmd, check=False, timeout=EXEC_TIMEOUT):
+        r = _run([PODMAN, "exec", self.cid, "bash", "-c", cmd], timeout, cmd)
         if check and r.returncode != 0:
             raise AssertionError(f"cmd failed ({r.returncode}): {cmd}\n{r.stdout}\n{r.stderr}")
         return r
@@ -133,15 +135,12 @@ def fips_target(request):
     mounts = {pkgdir(fam, rel): "/pkgs", _fips_dir(fam): "/fips", DATADIR: "/testdata"}
     if with_companion:
         mounts[_companion_dir(fam)] = "/fips-companion"
-    cid = start_container(image, mounts)
+    cid = install_packages(image, mounts,
+                          _fips_install_script(fam, with_companion), f"fips {fam}-{rel}")
     try:
-        script = _fips_install_script(fam, with_companion)
-        inst = subprocess.run([PODMAN, "exec", cid, "bash", "-c", script],
-                              capture_output=True, text=True)
-        assert inst.returncode == 0, f"install failed:\n{inst.stdout}\n{inst.stderr}"
         yield FipsTarget(fam, cid, companion_installed=with_companion)
     finally:
-        subprocess.run([PODMAN, "rm", "-f", cid], capture_output=True)
+        remove_container(cid)
 
 
 def test_module_installed(fips_target):
@@ -346,11 +345,12 @@ def _module_pkgs_present(fam, module):
 def _multi_install_script(fam, modules):
     specs = [_module_pkg_spec(fam, m) for m in modules]
     if fam == "deb":
-        return ("set -e; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null; "
-                "apt-get install -y --no-install-recommends binutils "
+        return (f"set -e; export DEBIAN_FRONTEND=noninteractive;"
+            f" apt-get {APT_OPTS} update -qq >/dev/null; "
+                f"apt-get {APT_OPTS} install -y --no-install-recommends binutils "
                 f"/pkgs/openssl{STREAM}-upstream_*_{DEB_ARCH}.deb " + " ".join(specs)
                 + " >/dev/null 2>&1")
-    return ("set -e; dnf install -y -q binutils "
+    return (f"set -e; dnf install -y -q {DNF_OPTS} binutils "
             f"/pkgs/openssl{STREAM}-upstream-*.{RPM_ARCH}.rpm " + " ".join(specs)
             + " >/dev/null 2>&1")
 
@@ -365,17 +365,15 @@ def _multi_container():
     if not glob.glob(os.path.join(pkgdir(fam, rel), f"openssl{STREAM}-upstream*")):
         pytest.skip(f"stream {STREAM} packages for {fam}/{rel} not built")
 
-    cid = start_container(image, {pkgdir(fam, rel): "/pkgs",
-                                 os.path.join(REPO, "output"): "/output",
-                                 DATADIR: "/testdata"})
+    cid = install_packages(image, {pkgdir(fam, rel): "/pkgs",
+                                  os.path.join(REPO, "output"): "/output",
+                                  DATADIR: "/testdata"},
+                          _multi_install_script(fam, MULTI_MODULES),
+                          f"fips multi {fam}-{rel}")
     try:
-        script = _multi_install_script(fam, MULTI_MODULES)
-        r = subprocess.run([PODMAN, "exec", cid, "bash", "-c", script],
-                           capture_output=True, text=True)
-        assert r.returncode == 0, f"installing several modules failed:\n{r.stdout}\n{r.stderr}"
         yield FipsTarget(fam, cid, companion_installed=True)
     finally:
-        subprocess.run([PODMAN, "rm", "-f", cid], capture_output=True)
+        remove_container(cid)
 
 
 @pytest.fixture(scope="module")

@@ -31,7 +31,7 @@ def test_matrix_matches_makefile_targets():
     if shutil.which("make") is None:
         pytest.skip("make not available")
     r = subprocess.run(["make", "-s", "ci-targets"], cwd=REPO,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, f"make -s ci-targets failed:\n{r.stdout}\n{r.stderr}"
 
     built = set(r.stdout.split())
