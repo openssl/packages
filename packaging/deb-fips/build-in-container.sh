@@ -28,8 +28,11 @@ fi
 
 echo ">> build ${PKG} ${FIPSVER} on ${CODENAME}"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y --no-install-recommends \
+# Bounded and retried: a mirror address with a broken path stalls the fetch,
+# and apt's own timeout does not fire once the connection half-closes.
+apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 update -qq
+apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 \
+    install -y --no-install-recommends \
     build-essential debhelper perl wget ca-certificates gnupg file xz-utils >/dev/null
 
 mkdir -p "$WORK" "$OUT"

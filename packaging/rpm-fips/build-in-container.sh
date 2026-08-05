@@ -21,7 +21,10 @@ else
 fi
 
 echo ">> build ${PKG} ${FIPSVER} (rpm)"
+# --setopt timeout/retries: a mirror address with a broken path stalls the
+# fetch, and the default retry count is too low to redraw a working one.
 dnf -y install --setopt=install_weak_deps=False \
+    --setopt=timeout=30 --setopt=retries=10 \
     rpm-build redhat-rpm-config gcc make wget ca-certificates gnupg2 \
     perl-interpreter perl-core 'perl(FindBin)' 'perl(IPC::Cmd)' >/dev/null
 
