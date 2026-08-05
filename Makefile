@@ -10,15 +10,15 @@
 #   make test                    install + check in clean containers
 #   make lint ; make clean ; make help
 
-STREAM  ?= 4.0
-VERSION ?= 4.0.1
+STREAM  := $(or $(STREAM),4.0)
+VERSION := $(or $(VERSION),4.0.1)
 
 ARCH ?= amd64
 export ARCH
 
 # The '-N' after the upstream version; bumped to republish the same upstream
 # version with different packaging.
-REVISION ?= 1
+REVISION := $(or $(REVISION),1)
 export REVISION
 
 # Timestamp for the changelogs, from the source rather than the clock: dpkg and
@@ -76,7 +76,7 @@ DEB_TARGETS = $(addprefix deb-,$(DEB_SUITES))
 RPM_TARGETS = $(addprefix rpm-el,$(EL_VERS))
 
 .DEFAULT_GOAL := help
-.PHONY: all deb rpm fips fips-deb fips-rpm test lint clean help ci-targets $(DEB_TARGETS) $(RPM_TARGETS)
+.PHONY: all deb rpm fips fips-deb fips-rpm test lint clean help ci-targets ci-config $(DEB_TARGETS) $(RPM_TARGETS)
 
 all: deb rpm
 deb: $(DEB_TARGETS)
@@ -127,6 +127,16 @@ lint:
 # One target name per line, for CI to build its job matrix from.
 ci-targets:
 	@printf '%s\n' $(DEB_TARGETS) $(RPM_TARGETS)
+
+ci-config:
+	@printf '%s\n' \
+	    'STREAM=$(STREAM)' \
+	    'VERSION=$(VERSION)' \
+	    'REVISION=$(REVISION)' \
+	    'FIPS_VALIDATED=$(FIPS_VALIDATED)' \
+	    'FIPS_DEB_SUITE=$(FIPS_DEB_SUITE)' \
+	    'FIPS_EL_VER=$(FIPS_EL_VER)' \
+	    'CI_TARGETS=$(DEB_TARGETS) $(RPM_TARGETS)'
 
 clean:
 	rm -rf output $(STAMPDIR)
