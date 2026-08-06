@@ -37,6 +37,10 @@ SHIM=${SQ_PKCS11_GPG_SHIM:-$(command -v sq-pkcs11-gpg-shim || true)}
 # sq-pkcs11 reads the certificate through the shim's environment contract.
 export SQ_PKCS11_CERT="$CERT"
 
+# rpmsign derives GPG_TTY from stdin so gpg can prompt for a passphrase, and
+# warns when stdin is not a tty — which it never is under CI.
+export GPG_TTY="${GPG_TTY:-/dev/null}"
+
 rpmsign --addsign \
     --define "_gpg_name $KEY_LABEL" \
     --define "__gpg $SHIM" \
