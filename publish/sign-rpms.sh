@@ -26,12 +26,20 @@ if [ ${#RPMS[@]} -eq 0 ]; then
     exit 0
 fi
 
+# Resolve the shim before use: an empty --define is not an error to rpm, it just
+# reports "Macro %__gpg has empty body" and never says what was missing.
+SHIM=${SQ_PKCS11_GPG_SHIM:-$(command -v sq-pkcs11-gpg-shim || true)}
+[ -x "$SHIM" ] || {
+    echo "sq-pkcs11-gpg-shim not found on PATH (PATH=$PATH). It ships in the sq-pkcs11 release tarball from v0.4.1; set SQ_PKCS11_GPG_SHIM to override." >&2
+    exit 1
+}
+
 # sq-pkcs11 reads the certificate through the shim's environment contract.
 export SQ_PKCS11_CERT="$CERT"
 
 rpmsign --addsign \
     --define "_gpg_name $KEY_LABEL" \
-    --define "__gpg $(command -v sq-pkcs11-gpg-shim)" \
+    --define "__gpg $SHIM" \
     "${RPMS[@]}"
 
 # Verify against a scratch rpmdb so the signing host keeps no state. --checksig
