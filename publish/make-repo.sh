@@ -4,13 +4,7 @@
 #
 #   publish/make-repo.sh <bucket-url> <repo-dir> <package-dir> <target>...
 #
-#   publish/make-repo.sh gs://openssl-packages-staging repo output \
-#       deb-bookworm rpm-el9
-#
-# Only the named slice is pulled back out of the bucket: an index has to be
-# generated over every package it lists, but a suite's index says nothing about
-# any other suite. Packages already in the bucket arrive signed and are left
-# exactly as they are.
+#   publish/make-repo.sh gs://some-bucket repo output deb-bookworm rpm-el9
 set -euo pipefail
 
 BUCKET=${1:?usage: make-repo.sh <bucket-url> <repo-dir> <package-dir> <target>...}
@@ -110,8 +104,6 @@ make_rpm_repo() {
                 -exec cp -f {} "$r/" \;
         done < <(sources rpm "$el")
 
-        # gz rather than the EL10 default of zstd: older dnf and third-party
-        # mirrors read gz.
         createrepo_c --quiet --update --general-compress-type=gz "$r"
         echo "== $el/$basearch: $(find "$r" -maxdepth 1 -name '*.rpm' | wc -l) packages"
     done
