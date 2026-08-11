@@ -57,10 +57,6 @@ jobs:
         target: ${{ fromJSON(needs.targets.outputs.targets) }}
     steps:
       - uses: actions/checkout@v7
-      # Keyed on everything that decides what the packages contain: the Makefile
-      # (stream, version, base images), build/ and packaging/. Changes elsewhere —
-      # tests, docs, this workflow — hit the cache. No restore-keys: a partial hit
-      # would leave another build's packages in output/ to be uploaded alongside.
       - id: cache
         uses: actions/cache@v6
         with:
@@ -68,7 +64,7 @@ jobs:
           key: packages-${{ matrix.arch }}-${{ matrix.target }}-t${{ env.RUN_TESTS }}-${{ hashFiles('Makefile', 'build/**', 'packaging/**') }}
       - name: Build
         if: steps.cache.outputs.cache-hit != 'true'
-        run: make ARCH=${{ matrix.arch }} ${{ matrix.target }}
+        run: make ARCH=${{ matrix.arch }} ${{ matrix.target }} fips-${{ matrix.target }}
       - uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.arch }}-${{ matrix.target }}
@@ -76,35 +72,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  build-fips:
-    name: fips ${{ matrix.family }} (${{ matrix.arch }})
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [amd64, arm64]
-        family: [deb, rpm]
-    steps:
-      - uses: actions/checkout@v7
-      - id: cache
-        uses: actions/cache@v6
-        with:
-          path: output/
-          key: packages-${{ matrix.arch }}-fips-${{ matrix.family }}-t${{ env.RUN_TESTS }}-${{ hashFiles('Makefile', 'build/**', 'packaging/**') }}
-      - name: Build
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: make ARCH=${{ matrix.arch }} fips-${{ matrix.family }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: packages-${{ matrix.arch }}-fips-${{ matrix.family }}
-          path: output/
-          if-no-files-found: error
-          retention-days: 7
-
   test:
     name: package tests (${{ matrix.arch }})
-    needs: [build, build-fips]
+    needs: [build]
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     strategy:

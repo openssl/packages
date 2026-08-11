@@ -49,11 +49,6 @@ CERT_3.1.2      = 4985
 FIPS_VERSION ?= 3.1.2
 export FIPS_VERSION
 
-# One module build serves a whole family, so build it on the OLDEST glibc in
-# that family: the module inherits a symbol-version floor from its builder.
-FIPS_DEB_SUITE ?= bullseye
-FIPS_EL_VER    ?= 9
-
 DEB_SUITES = bullseye bookworm trixie focal jammy noble resolute
 EL_VERS    = 9 10
 
@@ -71,12 +66,19 @@ COMMON_SRCS = packaging/common/fips-enable.in packaging/common/setup-shlib-varia
               packaging/common/trust-anchors.in packaging/common/openssl-fips.cnf.in
 DEB_SRCS = $(shell find packaging/deb/debian -type f) packaging/deb/build-in-container.sh build/build-deb.sh $(COMMON_SRCS)
 RPM_SRCS = packaging/rpm/openssl-upstream.spec packaging/rpm/build-in-container.sh build/build-rpm.sh $(COMMON_SRCS)
+VERIFY_SRCS = packaging/common/verify-source.sh packaging/common/sources.sha256 \
+              packaging/common/openssl-release-keys.asc
+FIPS_DEB_SRCS = $(shell find packaging/deb-fips -type f) build/build-fips-deb.sh $(VERIFY_SRCS)
+FIPS_RPM_SRCS = packaging/rpm-fips/openssl-fips-upstream.spec \
+                packaging/rpm-fips/build-in-container.sh build/build-fips-rpm.sh $(VERIFY_SRCS)
 
 DEB_TARGETS = $(addprefix deb-,$(DEB_SUITES))
 RPM_TARGETS = $(addprefix rpm-el,$(EL_VERS))
+FIPS_DEB_TARGETS = $(addprefix fips-,$(DEB_TARGETS))
+FIPS_RPM_TARGETS = $(addprefix fips-,$(RPM_TARGETS))
 
 .DEFAULT_GOAL := help
-.PHONY: all deb rpm fips fips-deb fips-rpm test lint clean help ci-targets ci-config $(DEB_TARGETS) $(RPM_TARGETS)
+.PHONY: all deb rpm fips fips-deb fips-rpm test lint clean help ci-targets ci-config $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS)
 
 all: deb rpm
 deb: $(DEB_TARGETS)
@@ -84,15 +86,23 @@ rpm: $(RPM_TARGETS)
 
 fips: fips-deb fips-rpm
 
-fips-deb:
-	$(foreach v,$(FIPS_VALIDATED),FIPS_CERT="$(CERT_$(v))" build/build-fips-deb.sh $(v) \
-	    $(FIPS_DEB_SUITE) $(IMAGE_$(FIPS_DEB_SUITE)) &&) true
-	FIPS_STREAM=$(STREAM) build/build-fips-deb.sh $(VERSION) \
-	    $(FIPS_DEB_SUITE) $(IMAGE_$(FIPS_DEB_SUITE))
-fips-rpm:
-	$(foreach v,$(FIPS_VALIDATED),FIPS_CERT="$(CERT_$(v))" build/build-fips-rpm.sh $(v) \
-	    $(FIPS_EL_VER) &&) true
-	FIPS_STREAM=$(STREAM) build/build-fips-rpm.sh $(VERSION) $(FIPS_EL_VER)
+# FIPS modules are built per release, like everything else. One fips-<target>
+# builds every validated version plus the stream companion for that release.
+fips-deb: $(FIPS_DEB_TARGETS)
+fips-rpm: $(FIPS_RPM_TARGETS)
+
+$(FIPS_DEB_TARGETS): fips-deb-%: $(STAMPDIR)/fips-deb-%-$(ARCH)
+$(FIPS_RPM_TARGETS): fips-rpm-el%: $(STAMPDIR)/fips-rpm-el%-$(ARCH)
+
+$(STAMPDIR)/fips-deb-%-$(ARCH): $(FIPS_DEB_SRCS) | $(STAMPDIR)
+	$(foreach v,$(FIPS_VALIDATED),FIPS_CERT="$(CERT_$(v))" build/build-fips-deb.sh $(v) $* $(IMAGE_$*) &&) true
+	FIPS_STREAM=$(STREAM) build/build-fips-deb.sh $(VERSION) $* $(IMAGE_$*)
+	@touch $@
+
+$(STAMPDIR)/fips-rpm-el%-$(ARCH): $(FIPS_RPM_SRCS) | $(STAMPDIR)
+	$(foreach v,$(FIPS_VALIDATED),FIPS_CERT="$(CERT_$(v))" build/build-fips-rpm.sh $(v) $* &&) true
+	FIPS_STREAM=$(STREAM) build/build-fips-rpm.sh $(VERSION) $*
+	@touch $@
 
 test:
 	@mkdir -p output
@@ -134,8 +144,6 @@ ci-config:
 	    'VERSION=$(VERSION)' \
 	    'REVISION=$(REVISION)' \
 	    'FIPS_VALIDATED=$(FIPS_VALIDATED)' \
-	    'FIPS_DEB_SUITE=$(FIPS_DEB_SUITE)' \
-	    'FIPS_EL_VER=$(FIPS_EL_VER)' \
 	    'CI_TARGETS=$(DEB_TARGETS) $(RPM_TARGETS)'
 
 clean:
@@ -156,7 +164,7 @@ help:
 	@echo "  clean               remove built packages and stamps"
 	@echo
 	@echo "Releases:     $(DEB_TARGETS) $(RPM_TARGETS)"
-	@echo "FIPS modules: validated $(FIPS_VALIDATED); companion $(STREAM) ($(VERSION))"
+	@echo "FIPS modules: validated $(FIPS_VALIDATED); companion $(STREAM) ($(VERSION)); per release"
 	@echo "Override:     make VERSION=4.0.2 deb-bookworm"
 	@echo "Subset test:  make test PYTEST_ARGS='-k \"bookworm or rpm-9\"'"
 	@echo "Build tests:  make RUN_TESTS=1 deb-bookworm   (runs OpenSSL's own suite)"

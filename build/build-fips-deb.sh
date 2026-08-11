@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Build the FIPS module .debs. One build serves every deb release, so the
-# builder must be the OLDEST glibc we target.
+# Build the FIPS module .debs for ONE deb release, on that release.
 #
 #   build/build-fips-deb.sh [FIPSVER] [SUITE] [IMAGE]
 set -euo pipefail
 
 FIPSVER="${1:-3.1.2}"
-SUITE="${2:-bullseye}"
+SUITE="${2:-bookworm}"
 IMAGE="${3:-debian:$SUITE}"
 ARCH="${ARCH:-amd64}"
 
@@ -18,10 +17,10 @@ if [ -n "${FIPS_STREAM:-}" ]; then
 else
     PKG="openssl-fips${FIPSVER}-upstream"
 fi
-OUT="$REPO/output/${PKG}/deb"
+OUT="$REPO/output/${PKG}/deb/$SUITE"
 mkdir -p "$OUT"
 
-echo "== fips deb: ${PKG} ${FIPSVER} on ${IMAGE} linux/${ARCH} =="
+echo "== fips deb: ${PKG} ${FIPSVER} on ${IMAGE} linux/${ARCH} (suite ${SUITE}) =="
 podman run --rm --platform "linux/${ARCH}" \
     -v "$REPO":/src:ro \
     -v "$OUT":/out \

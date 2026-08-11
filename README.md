@@ -107,8 +107,8 @@ installed together, independently of any stream.
 | `openssl-fips<VERSION>-upstream-dbgsym` (Debian, Ubuntu)<br>`openssl-fips<VERSION>-upstream-debuginfo` and `-debugsource` (Enterprise Linux) | debug symbols |
 
 ```
-openssl-fips3.1.2-upstream_3.1.2-1_amd64.deb        Debian, Ubuntu
-openssl-fips3.1.2-upstream-3.1.2-1.el9.x86_64.rpm   Enterprise Linux
+openssl-fips3.1.2-upstream_3.1.2-1+deb12_amd64.deb    Debian 12
+openssl-fips3.1.2-upstream-3.1.2-1.el9.x86_64.rpm     Enterprise Linux 9
 ```
 
 **The stream companion module** is named for its stream, like every other
@@ -122,8 +122,8 @@ without freezing on old module versions.
 | `openssl<MAJOR>.<MINOR>-upstream-fips` | the provider module, under `/opt/openssl/fips/<MAJOR>.<MINOR>` |
 
 ```
-openssl4.0-upstream-fips_4.0.1-1_amd64.deb          Debian, Ubuntu
-openssl4.0-upstream-fips-4.0.1-1.el9.x86_64.rpm     Enterprise Linux
+openssl4.0-upstream-fips_4.0.1-1+deb12_amd64.deb      Debian 12
+openssl4.0-upstream-fips-4.0.1-1.el9.x86_64.rpm       Enterprise Linux 9
 ```
 
 `openssl-fips-enable list` reports each installed module's status: the

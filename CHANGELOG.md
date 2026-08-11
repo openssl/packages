@@ -20,8 +20,8 @@ installing the first release:
   never moves to different bytes. Each stream additionally has a companion
   module named for the stream (`openssl4.0-upstream-fips`), which is **not**
   validated and upgrades in step with the stream.
-- **The FIPS module is built on the oldest glibc in each package family**, so a
-  single build installs on every release of that family.
+- **FIPS provider modules are built per distribution release**, like every
+  other package, so each release installs a module built on its own toolchain.
 - **Source tarballs are verified before a build proceeds** — a SHA-256 pinned in
   this repository, then the upstream release signature against a keyring
   committed alongside it.

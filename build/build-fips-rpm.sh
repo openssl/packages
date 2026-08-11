@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Build the FIPS module .rpms. One build serves every EL release, so the
-# builder must be the OLDEST glibc we target — el9.
+# Build the FIPS module .rpms for ONE EL release, on that release.
 #
 #   build/build-fips-rpm.sh [FIPSVER] [EL] [IMAGE]
 set -euo pipefail
@@ -18,10 +17,10 @@ if [ -n "${FIPS_STREAM:-}" ]; then
 else
     PKG="openssl-fips${FIPSVER}-upstream"
 fi
-OUT="$REPO/output/${PKG}/rpm"
+OUT="$REPO/output/${PKG}/rpm/el$EL"
 mkdir -p "$OUT"
 
-echo "== fips rpm: ${PKG} ${FIPSVER} on ${IMAGE} linux/${ARCH} =="
+echo "== fips rpm: ${PKG} ${FIPSVER} on ${IMAGE} linux/${ARCH} (el${EL}) =="
 podman run --rm --platform "linux/${ARCH}" \
     -v "$REPO":/src:ro \
     -v "$OUT":/out \

@@ -3,9 +3,8 @@
 and enforces approved-only crypto. Also where cross-major loading (a 3.x module
 under 4.x libcrypto) is exercised.
 
-Parametrized over the WHOLE matrix, not just the releases the module is built
-on: one build serves a family, and its glibc symbol-version floor makes every
-release a separate installability claim.
+Parametrized over the WHOLE matrix: modules are built per release, like every
+other package, and each release installs and activates its own build.
 """
 import glob
 import os
@@ -49,13 +48,17 @@ def built_fips_versions():
     return sorted(found, key=lambda v: [int(x) for x in v.split(".")])
 
 
-def _fips_dir(fam, version=FIPS_VERSION):
+def _fips_subdir(fam, rel):
+    return os.path.join("deb", rel) if fam == "deb" else os.path.join("rpm", f"el{rel}")
+
+
+def _fips_dir(fam, rel, version=FIPS_VERSION):
     return os.path.join(REPO, "output", f"openssl-fips{version}-upstream",
-                        "deb" if fam == "deb" else "rpm")
+                        _fips_subdir(fam, rel))
 
 
-def _fips_pkgs_present(fam, version=FIPS_VERSION):
-    d = _fips_dir(fam, version)
+def _fips_pkgs_present(fam, rel, version=FIPS_VERSION):
+    d = _fips_dir(fam, rel, version)
     if fam == "deb":
         return bool(glob.glob(os.path.join(
             d, f"openssl-fips{version}-upstream_*_{DEB_ARCH}.deb")))
@@ -63,27 +66,26 @@ def _fips_pkgs_present(fam, version=FIPS_VERSION):
         d, f"openssl-fips{version}-upstream-*.{RPM_ARCH}.rpm")))
 
 
-def _companion_dir(fam):
+def _companion_dir(fam, rel):
     return os.path.join(REPO, "output", f"openssl{STREAM}-upstream-fips",
-                        "deb" if fam == "deb" else "rpm")
+                        _fips_subdir(fam, rel))
 
 
-def _companion_pkg_glob(fam):
+def _companion_pkg_glob(fam, rel):
     if fam == "deb":
-        return os.path.join(_companion_dir(fam),
+        return os.path.join(_companion_dir(fam, rel),
                             f"openssl{STREAM}-upstream-fips_*_{DEB_ARCH}.deb")
-    return os.path.join(_companion_dir(fam),
+    return os.path.join(_companion_dir(fam, rel),
                         f"openssl{STREAM}-upstream-fips-[0-9]*.{RPM_ARCH}.rpm")
 
 
-def _companion_pkgs_present(fam):
-    return bool(glob.glob(_companion_pkg_glob(fam)))
+def _companion_pkgs_present(fam, rel):
+    return bool(glob.glob(_companion_pkg_glob(fam, rel)))
 
 
 def _fips_install_script(fam, with_companion):
     # binutils supplies readelf, for the module's ELF properties. The companion
-    # package rides along when built, proving its installability (glibc floor)
-    # on every release exactly like the validated module's.
+    # package rides along when built for this release.
     companion_deb = f"/fips-companion/openssl{STREAM}-upstream-fips_*_{DEB_ARCH}.deb"
     companion_rpm = f"/fips-companion/openssl{STREAM}-upstream-fips-[0-9]*.{RPM_ARCH}.rpm"
     if fam == "deb":
@@ -127,14 +129,14 @@ class FipsTarget:
                 ids=[f"{f}-{r}" for f, r, _ in FIPS_TARGETS])
 def fips_target(request):
     fam, rel, image = request.param
-    if not _fips_pkgs_present(fam):
-        pytest.skip(f"FIPS {FIPS_VERSION} packages for {fam} not built")
+    if not _fips_pkgs_present(fam, rel):
+        pytest.skip(f"FIPS {FIPS_VERSION} packages for {fam}-{rel} not built")
     if not glob.glob(os.path.join(pkgdir(fam, rel), f"openssl{STREAM}-upstream*")):
         pytest.skip(f"stream {STREAM} packages for {fam}/{rel} not built")
-    with_companion = _companion_pkgs_present(fam)
-    mounts = {pkgdir(fam, rel): "/pkgs", _fips_dir(fam): "/fips", DATADIR: "/testdata"}
+    with_companion = _companion_pkgs_present(fam, rel)
+    mounts = {pkgdir(fam, rel): "/pkgs", _fips_dir(fam, rel): "/fips", DATADIR: "/testdata"}
     if with_companion:
-        mounts[_companion_dir(fam)] = "/fips-companion"
+        mounts[_companion_dir(fam, rel)] = "/fips-companion"
     cid = install_packages(image, mounts,
                           _fips_install_script(fam, with_companion), f"fips {fam}-{rel}")
     try:
@@ -162,8 +164,7 @@ def test_helper_list_reports_validation_status(fips_target):
 def test_companion_module_installed_and_activates(fips_target):
     """The stream companion module: named after the stream, installed at a
     stream-stable path, reporting its real source version, activating and
-    enforcing approved-only crypto on every release — the same installability
-    claim (glibc floor included) the validated module makes."""
+    enforcing approved-only crypto on every release."""
     t = fips_target
     if not t.companion_installed:
         pytest.skip(f"companion module for stream {STREAM} not built")
@@ -325,25 +326,24 @@ def test_module_carries_the_distribution_link_flags(fips_target):
 MULTI_MODULES = built_fips_versions() + [COMPANION]
 
 
-def _module_pkg_spec(fam, module):
+def _module_pkg_spec(fam, rel, module):
     """Package glob for a module id, as a path under the /output mount."""
-    sub = "deb" if fam == "deb" else "rpm"
     if module == COMPANION:
         pkg = f"openssl{STREAM}-upstream-fips"
     else:
         pkg = f"openssl-fips{module}-upstream"
     suffix = f"_*_{DEB_ARCH}.deb" if fam == "deb" else f"-[0-9]*.{RPM_ARCH}.rpm"
-    return f"/output/{pkg}/{sub}/{pkg}{suffix}"
+    return f"/output/{pkg}/{_fips_subdir(fam, rel)}/{pkg}{suffix}"
 
 
-def _module_pkgs_present(fam, module):
+def _module_pkgs_present(fam, rel, module):
     if module == COMPANION:
-        return _companion_pkgs_present(fam)
-    return _fips_pkgs_present(fam, module)
+        return _companion_pkgs_present(fam, rel)
+    return _fips_pkgs_present(fam, rel, module)
 
 
-def _multi_install_script(fam, modules):
-    specs = [_module_pkg_spec(fam, m) for m in modules]
+def _multi_install_script(fam, rel, modules):
+    specs = [_module_pkg_spec(fam, rel, m) for m in modules]
     if fam == "deb":
         return (f"set -e; export DEBIAN_FRONTEND=noninteractive;"
             f" apt-get {APT_OPTS} update -qq >/dev/null; "
@@ -360,15 +360,15 @@ def _multi_container():
         pytest.skip("need two FIPS modules built (e.g. make fips-deb fips-rpm)")
     fam, rel, image = MULTI_TARGET
     for m in MULTI_MODULES:
-        if not _module_pkgs_present(fam, m):
-            pytest.skip(f"FIPS module {m} packages for {fam} not built")
+        if not _module_pkgs_present(fam, rel, m):
+            pytest.skip(f"FIPS module {m} packages for {fam}-{rel} not built")
     if not glob.glob(os.path.join(pkgdir(fam, rel), f"openssl{STREAM}-upstream*")):
         pytest.skip(f"stream {STREAM} packages for {fam}/{rel} not built")
 
     cid = install_packages(image, {pkgdir(fam, rel): "/pkgs",
                                   os.path.join(REPO, "output"): "/output",
                                   DATADIR: "/testdata"},
-                          _multi_install_script(fam, MULTI_MODULES),
+                          _multi_install_script(fam, rel, MULTI_MODULES),
                           f"fips multi {fam}-{rel}")
     try:
         yield FipsTarget(fam, cid, companion_installed=True)
@@ -463,12 +463,8 @@ def test_companion_reinstall_reactivates_it(fips_multi_fresh):
     assert t.run(f"{t.helper} verify").returncode != 0, \
         "the MAC should be broken before the reinstall"
 
-    if t.family == "deb":
-        r = t.run(f"dpkg -i /output/openssl{STREAM}-upstream-fips/deb/"
-                  f"openssl{STREAM}-upstream-fips_*_{DEB_ARCH}.deb 2>&1")
-    else:
-        r = t.run(f"rpm -U --replacepkgs /output/openssl{STREAM}-upstream-fips/rpm/"
-                  f"openssl{STREAM}-upstream-fips-[0-9]*.{RPM_ARCH}.rpm 2>&1")
+    r = t.run(f"{'dpkg -i' if t.family == 'deb' else 'rpm -U --replacepkgs'} "
+              f"{_module_pkg_spec(t.family, MULTI_TARGET[1], COMPANION)} 2>&1")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "re-activated" in (r.stdout + r.stderr), r.stdout + r.stderr
 
