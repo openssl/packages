@@ -45,7 +45,7 @@ from files:
 
 ```sh
 # Debian, Ubuntu
-sudo apt install ./openssl4.0-upstream_4.0.1-1_amd64.deb
+sudo apt install ./openssl4.0-upstream_4.0.1-1+deb12_amd64.deb
 
 # Enterprise Linux
 sudo dnf install ./openssl4.0-upstream-4.0.1-1.el9.x86_64.rpm
@@ -74,11 +74,17 @@ install alongside each other.
 | `openssl<MAJOR>.<MINOR>-upstream-dbgsym` (Debian, Ubuntu)<br>`openssl<MAJOR>.<MINOR>-upstream-debuginfo` and `-debugsource` (Enterprise Linux) | debug symbols |
 
 ```
-openssl4.0-upstream_4.0.1-1_amd64.deb            Debian, Ubuntu
-openssl4.0-upstream-dev_4.0.1-1_amd64.deb
-openssl4.0-upstream-4.0.1-1.el9.x86_64.rpm       Enterprise Linux
+openssl4.0-upstream_4.0.1-1+deb12_amd64.deb           Debian 12
+openssl4.0-upstream_4.0.1-1+ubuntu24.04_amd64.deb     Ubuntu 24.04
+openssl4.0-upstream-dev_4.0.1-1+deb12_amd64.deb
+openssl4.0-upstream-4.0.1-1.el9.x86_64.rpm            Enterprise Linux 9
 openssl4.0-upstream-devel-4.0.1-1.el9.x86_64.rpm
 ```
+
+Every distribution release gets its own build, so the package version carries
+the release it was built for — `+deb12`, `+ubuntu24.04` on the deb side, the
+usual `.el9`/`.el10` dist tag on rpm. Two packages for different releases never
+share a file name.
 
 Ubuntu ships debug symbols with a `.ddeb` extension rather than `.deb`.
 

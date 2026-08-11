@@ -149,6 +149,13 @@ class Target:
         return self.run(cmd, check=True).stdout.strip()
 
 
+def deb_dist_tag(target):
+    """The suite qualifier baked into deb versions (+deb12, +ubuntu22.04) —
+    the deb analogue of rpm's %{?dist}. Same rule as the build."""
+    osid, ver = target.out('. /etc/os-release; echo "$ID $VERSION_ID"').split()
+    return f"+deb{ver}" if osid == "debian" else f"+{osid}{ver}"
+
+
 def start_container(image, mounts):
     """Run a detached container with {host_path: container_path} mounted read-only."""
     argv = [PODMAN, "run", "-d", "--platform", f"linux/{ARCH}"]

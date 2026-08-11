@@ -13,7 +13,18 @@ SRCREPO=/src
 OUT=/out
 WORK=/tmp/work
 
-echo ">> build openssl${STREAM}-upstream ${VERSION} on ${CODENAME}"
+# Subshell: os-release defines VERSION and ID, which must not clobber ours.
+# shellcheck disable=SC1091
+DEBDIST=$(
+    . /etc/os-release
+    : "${VERSION_ID:?no VERSION_ID in /etc/os-release}"
+    case "$ID" in
+        debian) echo "+deb${VERSION_ID}" ;;
+        *)      echo "+${ID}${VERSION_ID}" ;;
+    esac
+)
+
+echo ">> build openssl${STREAM}-upstream ${VERSION}-${REVISION}${DEBDIST} on ${CODENAME}"
 export DEBIAN_FRONTEND=noninteractive
 # Bounded and retried: a mirror address with a broken path stalls the fetch,
 # and apt's own timeout does not fire once the connection half-closes.
@@ -43,6 +54,7 @@ subst() {
         -e "s|@PREFIX@|/opt/openssl/${STREAM}|g" \
         -e "s|@VERSION@|${VERSION}|g" \
         -e "s|@REVISION@|${REVISION}|g" \
+        -e "s|@DEBDIST@|${DEBDIST}|g" \
         -e "s|@CODENAME@|${CODENAME}|g" \
         -e "s|@DATE@|${date_r}|g" "$1"
 }

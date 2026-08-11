@@ -25,6 +25,10 @@ installing the first release:
 - **Source tarballs are verified before a build proceeds** — a SHA-256 pinned in
   this repository, then the upstream release signature against a keyring
   committed alongside it.
+- **Package versions name the release they were built for.** deb: a suite
+  qualifier in the revision (`4.0.1-1+deb12`, `+ubuntu24.04`); rpm: the usual
+  dist tag (`.el9`). Every distribution release gets its own build, and two
+  builds never share a file name.
 - **Packages install under `/opt/openssl/<stream>`** with configuration in
   `/etc/opt/openssl/<stream>`, and never touch the distribution's own OpenSSL:
   no entry is added to the runtime linker search path, and the libraries carry

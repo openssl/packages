@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from conftest import REVISION
+from conftest import REVISION, deb_dist_tag
 
 
 def _dynamic(target, path):
@@ -174,7 +174,8 @@ def test_package_version_carries_the_revision(target):
         else:
             got = target.out(f"dpkg-query -W -f='${{Version}}' {pkg}")
             ver, _, rel = got.rpartition("-")
-            assert rel == REVISION, f"{pkg}: revision {rel!r} != {REVISION}"
+            want = REVISION + deb_dist_tag(target)
+            assert rel == want, f"{pkg}: revision {rel!r} != {want!r}"
         assert ver.startswith(expected), f"{pkg}: version {ver!r} is not {expected}x"
 
 
