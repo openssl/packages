@@ -51,6 +51,7 @@ rpmbuild -bb \
     --define "stream ${STREAM}" \
     --define "version ${VERSION}" \
     --define "revision ${REVISION}" \
+    --define "packaging_commit ${PACKAGING_COMMIT:-unknown}" \
     --define "changelog_date ${CHANGELOG_DATE}" \
     "${RT[@]}" "${JB[@]}" \
     "$topdir/SPECS/openssl-upstream.spec"

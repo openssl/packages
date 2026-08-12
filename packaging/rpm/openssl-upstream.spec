@@ -17,12 +17,16 @@
 %global __provides_exclude_from ^%{prefix}/.*$
 %global __requires_exclude ^lib(ssl|crypto).*\\.so
 
+%global packaging_commit %{?packaging_commit}%{!?packaging_commit:unknown}
+
 Name:           openssl%{stream}-upstream
 Version:        %{version}
 Release:        %{revision}%{?dist}
 Summary:        OpenSSL %{stream} upstream build (installed under /opt)
 License:        Apache-2.0
 URL:            https://openssl-library.org
+# Which packaging produced this build; RPMTAG_VCS is the field for it.
+VCS:            https://github.com/openssl/packages@%{packaging_commit}
 Vendor:         OpenSSL Corporation
 Source0:        openssl-%{version}.tar.gz
 Source1:        setup-shlib-variant.sh

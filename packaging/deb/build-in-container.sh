@@ -54,6 +54,7 @@ subst() {
         -e "s|@PREFIX@|/opt/openssl/${STREAM}|g" \
         -e "s|@VERSION@|${VERSION}|g" \
         -e "s|@REVISION@|${REVISION}|g" \
+        -e "s|@PACKAGING_COMMIT@|${PACKAGING_COMMIT:-unknown}|g" \
         -e "s|@DEBDIST@|${DEBDIST}|g" \
         -e "s|@CODENAME@|${CODENAME}|g" \
         -e "s|@DATE@|${date_r}|g" "$1"

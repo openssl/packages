@@ -26,6 +26,11 @@ export REVISION
 SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
 export SOURCE_DATE_EPOCH
 
+# Recorded in every package so an artifact says which packaging built it.
+PACKAGING_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)$(shell \
+    git diff-index --quiet HEAD -- 2>/dev/null || echo -dirty)
+export PACKAGING_COMMIT
+
 # OpenSSL's build parallelism inside each container. Pin it where memory per
 # core is tight: LTO link jobs multiply against it.
 JOBS ?= $(shell nproc)
@@ -155,6 +160,7 @@ $(STAMPDIR)/fips-companion-rpm-el%-$(ARCH)-$(BUILT): $(FIPS_RPM_SRCS) | $(STAMPD
 test:
 	@mkdir -p output
 	STREAM=$(STREAM) VERSION=$(VERSION) FIPS_VERSION=$(FIPS_VERSION) \
+	    PACKAGING_COMMIT=$(PACKAGING_COMMIT) \
 	    FIPS_VALIDATED="$(FIPS_VALIDATED)" REVISION=$(REVISION) \
 	    $(PYTEST) --junitxml=output/tests.xml --junit-prefix=$(ARCH) $(PYTEST_ARGS)
 

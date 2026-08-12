@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from conftest import REVISION, deb_dist_tag
+from conftest import PACKAGING_COMMIT, REVISION, deb_dist_tag
 
 
 def _dynamic(target, path):
@@ -214,3 +214,17 @@ def test_no_unsubstituted_placeholders_in_shipped_metadata(target):
                 f"{placeholder.search(text).group(0)}"
             assert not provisional.search(text), \
                 f"{pkg} {what} has provisional wording: {provisional.search(text).group(0)}"
+
+
+def test_packages_record_the_packaging_commit(target):
+    """An artifact has to say which packaging built it: the external record can
+    be lost or drift, the field inside the package cannot."""
+    if not PACKAGING_COMMIT:
+        pytest.skip("PACKAGING_COMMIT unset; nothing to compare against")
+    for pkg in _package_names(target):
+        if target.family == "rpm":
+            got = target.out(f"rpm -q --qf '%{{VCS}}' {pkg}")
+        else:
+            # dpkg strips the XB- prefix when copying the field into the binary.
+            got = target.out(f"dpkg-query -f '${{Packaging-Commit}}' -W {pkg}")
+        assert got.endswith(PACKAGING_COMMIT), f"{pkg}: {got!r} does not name {PACKAGING_COMMIT}"

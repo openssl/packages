@@ -5,6 +5,7 @@
 
 %global fipsver   %{?fipsver}%{!?fipsver:3.1.2}
 %global revision  %{?revision}%{!?revision:1}
+%global packaging_commit %{?packaging_commit}%{!?packaging_commit:unknown}
 %global changelog_date %{?changelog_date}%{!?changelog_date:Tue Jul 21 2026}
 %global moddir    %{?fips_stream}%{!?fips_stream:%{fipsver}}
 %global pkgname   %{?fips_stream:openssl%{fips_stream}-upstream-fips}%{!?fips_stream:openssl-fips%{fipsver}-upstream}
@@ -23,6 +24,8 @@ Release:        %{revision}%{?dist}
 Summary:        OpenSSL FIPS provider %{fipsver} (upstream%{?fips_stream:, %{fips_stream} stream companion, not validated})
 License:        Apache-2.0
 URL:            https://openssl-library.org
+# Which packaging produced this build; RPMTAG_VCS is the field for it.
+VCS:            https://github.com/openssl/packages@%{packaging_commit}
 Vendor:         OpenSSL Corporation
 Source0:        openssl-%{fipsver}.tar.gz
 

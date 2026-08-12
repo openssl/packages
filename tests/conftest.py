@@ -29,6 +29,8 @@ REVISION = os.environ.get("REVISION", "1")
 # The exact upstream version this run asked for. Unset when the packages under
 # test were not built by this invocation, so the check it drives is skipped.
 VERSION = os.environ.get("VERSION", "")
+# The packaging revision recorded in each package; empty when unknown.
+PACKAGING_COMMIT = os.environ.get("PACKAGING_COMMIT", "")
 ARCH = os.environ.get("ARCH", "amd64")            # amd64 | arm64
 DEB_ARCH = {"amd64": "amd64", "arm64": "arm64"}[ARCH]
 RPM_ARCH = {"amd64": "x86_64", "arm64": "aarch64"}[ARCH]

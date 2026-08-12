@@ -49,6 +49,7 @@ FS=()
 JB=()
 [ -n "${JOBS:-}" ] && JB=(--define "_smp_build_ncpus ${JOBS}")
 rpmbuild -bb --define "fipsver ${FIPSVER}" --define "revision ${REVISION}" \
+    --define "packaging_commit ${PACKAGING_COMMIT:-unknown}" \
     --define "changelog_date ${CHANGELOG_DATE}" "${FC[@]}" "${FS[@]}" "${JB[@]}" \
     "$topdir/SPECS/openssl-fips-upstream.spec"
 

@@ -8,6 +8,7 @@ Homepage: https://openssl-library.org
 
 Package: @FIPSPKG@
 Architecture: any
+XB-Packaging-Commit: @PACKAGING_COMMIT@
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: OpenSSL FIPS provider @FIPSVER@ (upstream build)
  The OpenSSL FIPS provider module (fips.so) built from source release

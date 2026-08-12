@@ -8,6 +8,7 @@ Homepage: https://openssl-library.org
 
 Package: openssl@STREAM@-upstream
 Architecture: any
+XB-Packaging-Commit: @PACKAGING_COMMIT@
 Multi-Arch: no
 Depends: ${shlibs:Depends}, ${misc:Depends}, ca-certificates
 Description: OpenSSL @STREAM@ upstream build (installed under /opt)
@@ -22,6 +23,7 @@ Description: OpenSSL @STREAM@ upstream build (installed under /opt)
 Package: openssl@STREAM@-upstream-dev
 Section: libdevel
 Architecture: any
+XB-Packaging-Commit: @PACKAGING_COMMIT@
 Multi-Arch: no
 Depends: openssl@STREAM@-upstream (= ${binary:Version}), ${misc:Depends}
 Description: OpenSSL @STREAM@ upstream build (development files)

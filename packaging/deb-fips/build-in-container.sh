@@ -59,6 +59,7 @@ cp -r "$SRCREPO/packaging/deb-fips/debian" debian
 date_r="$(date -R -u -d "@$SOURCE_DATE_EPOCH")"
 subst() { sed -e "s/@FIPSVER@/${FIPSVER}/g" -e "s/@CODENAME@/${CODENAME}/g" \
               -e "s/@REVISION@/${REVISION}/g" -e "s/@DEBDIST@/${DEBDIST}/g" \
+              -e "s|@PACKAGING_COMMIT@|${PACKAGING_COMMIT:-unknown}|g" \
               -e "s/@FIPSPKG@/${PKG}/g" -e "s/@MODDIR@/${MODDIR}/g" \
               -e "s/@FIPS_CERT@/${FIPS_CERT:-}/g" \
               -e "s/@FIPS_STREAM@/${FIPS_STREAM:-}/g" \
