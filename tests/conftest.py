@@ -309,6 +309,8 @@ def tls_server(target):
 def pytest_configure(config):
     config.addinivalue_line(
         "markers", "network: reaches the public internet; needs RUN_NETWORK_TESTS=1")
+    config.addinivalue_line(
+        "markers", "unit: pure logic; needs no container and no built packages")
 
 
 def pytest_collection_modifyitems(config, items):
