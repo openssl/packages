@@ -104,7 +104,7 @@ FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RP
 .PHONY: all stream deb rpm fips fips-deb fips-rpm fips-validated fips-companion \
         fips-validated-publish fips-validated-publish-deb fips-validated-publish-rpm \
         fips-validated-deb fips-validated-rpm fips-companion-deb fips-companion-rpm \
-        test lint clean help ci-targets ci-config expand-goals publish-tags publish-packages publish-check \
+        test lint clean help ci-targets ci-config expand-goals publish-tags publish-manifest publish-packages publish-check \
         $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS) $(FIPS_PARTS)
 
 all: stream fips
@@ -198,10 +198,19 @@ expand-goals:
 # The publish tags those goals would create, one per line, for the pipeline to
 # claim after it publishes.
 ARCHES ?= $(ARCH)
+# STAMP is what makes the name unique per publish: a backfill, a second
+# architecture and a module-only publish all touch the same version-revision.
+STAMP ?=
 publish-tags:
-	@publish/tags.py list --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
-	    --arches "$(ARCHES)" --version "$(VERSION)" --revision "$(REVISION)" \
-	    --fips-validated "$(FIPS_VALIDATED)"
+	@publish/tags.py name --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
+	    --version "$(VERSION)" --revision "$(REVISION)" \
+	    --fips-validated "$(FIPS_VALIDATED)" --stamp "$(STAMP)"
+
+# What the tag's annotation records: every package, release and arch published.
+publish-manifest:
+	@publish/tags.py manifest --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
+	    --stream "$(STREAM)" --version "$(VERSION)" --revision "$(REVISION)" \
+	    --fips-validated "$(FIPS_VALIDATED)" --arches "$(ARCHES)"
 
 # Refuse before building if the repository already holds what this run would
 # publish. The bucket is the real state: tags are written after the upload, so a

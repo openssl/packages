@@ -1,137 +1,120 @@
-"""The publish tag format, which is the pipeline's append-only publish guard.
+"""The publish tag: one per publish, recording what it published.
 
-Pure logic: the tags a run would create, and reading them back off the remote.
-Nothing here builds or installs anything, so it runs anywhere.
+The tag is a record, not a gate — publish/is_published.py asks the bucket whether
+a publish may proceed. So these check that the name is unique per publish and
+honest about what it names, and that the annotation carries the detail the name
+no longer does.
 """
 import os
+import subprocess
 import sys
 
 import pytest
 
-from conftest import REPO
-
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "publish"))
+sys.path.insert(0, os.path.join(REPO, "build"))
 from goals import expand  # noqa: E402
-from tags import packages, next_free, remote_tags, split, tags  # noqa: E402
+from is_published import wanted  # noqa: E402
+from tags import identities, manifest, packages, tag  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
-KINDS = {"stream": ["deb-bookworm", "rpm-el9"],
-         "validated": ["rpm-el9"],
-         "companion": ["deb-bookworm"]}
+EVERY = ["deb-bookworm", "deb-noble", "rpm-el9"]
+STAMP = "20260812T121318Z"
 
 
-def test_a_tag_is_created_per_published_target_and_arch():
-    assert tags(KINDS, ["amd64", "arm64"], "4.0.1", "1", ["3.1.2"]) == [
-        "publish/4.0.1-1/deb-bookworm/amd64",
-        "publish/4.0.1-1/rpm-el9/amd64",
-        "publish/fips-companion-4.0.1-1/deb-bookworm/amd64",
-        "publish/fips-validated-3.1.2-1/rpm-el9/amd64",
-        "publish/4.0.1-1/deb-bookworm/arm64",
-        "publish/4.0.1-1/rpm-el9/arm64",
-        "publish/fips-companion-4.0.1-1/deb-bookworm/arm64",
-        "publish/fips-validated-3.1.2-1/rpm-el9/arm64",
-    ]
+def _tag(goals, version="4.0.1", revision="1", fips=("3.1.2",)):
+    return tag(expand(goals, EVERY), version, revision, list(fips), STAMP)
 
 
-def test_a_goal_naming_nothing_publishes_nothing():
-    empty = {"stream": [], "validated": [], "companion": []}
-    assert tags(empty, ["amd64"], "4.0.1", "1", ["3.1.2"]) == []
+def test_a_publish_creates_exactly_one_tag():
+    """It used to be one per package, release and arch — 36 for a stream
+    publish. The detail moved into the annotation."""
+    assert _tag("stream fips-companion") == f"publish/4.0.1-1/{STAMP}"
 
 
-def test_every_tag_a_run_creates_reads_back_to_its_own_identity():
-    """The tag ends in /<target>/<arch> and targets contain hyphens, so an
-    identity taken from the last hyphen of the whole tag would be wrong."""
-    created = tags(KINDS, ["amd64"], "4.0.1", "2", ["3.1.2"])
-    assert [split(tag) for tag in created] == [
-        ("publish/4.0.1", 2),
-        ("publish/4.0.1", 2),
-        ("publish/fips-companion-4.0.1", 2),
-        ("publish/fips-validated-3.1.2", 2),
-    ]
+def test_a_module_only_publish_is_not_named_after_the_stream():
+    """It builds streams to test the modules against but publishes neither."""
+    assert _tag("fips-validated-publish") == f"publish/fips-3.1.2-1/{STAMP}"
 
 
-@pytest.mark.parametrize("ref", [
-    "openssl-4.0.1",
-    "publish/4.0.1-1",
-    "publish/4.0.1/deb-bookworm/amd64",
-    "publish/4.0.1-1/deb-bookworm/amd64/extra",
-    "publish/4.0.1-x/deb-bookworm/amd64",
-])
-def test_anything_that_is_not_a_publish_tag_is_ignored(ref):
-    assert split(ref) is None
+def test_a_run_publishing_both_names_both():
+    assert _tag("deb-bookworm fips-deb-bookworm") == \
+        f"publish/4.0.1-1+fips-3.1.2-1/{STAMP}"
 
 
-def test_the_module_kinds_are_separate_revision_series():
-    """A stream and its modules are published on their own schedules, so their
-    revisions must not be counted together."""
-    assert split("publish/4.0.1-1/deb-bookworm/amd64")[0] != \
-        split("publish/fips-companion-4.0.1-1/deb-bookworm/amd64")[0]
+def test_identities_are_sorted_and_deduplicated():
+    """Two goals covering the same identity must not name it twice, and the
+    order must not depend on how the goals were typed."""
+    kinds = expand("stream fips-companion deb-bookworm", EVERY)
+    assert identities(kinds, "4.0.1", "1", ["3.1.2"]) == ["4.0.1-1"]
+    assert identities(expand("all", EVERY), "4.0.1", "1", ["3.5.0", "3.1.2"]) == \
+        ["4.0.1-1", "fips-3.1.2-1", "fips-3.5.0-1"]
 
 
-LS_REMOTE = """\
-0000000000000000000000000000000000000000\trefs/heads/main
-1111111111111111111111111111111111111111\trefs/tags/publish/4.0.1-1/deb-bookworm/amd64
-1111111111111111111111111111111111111111\trefs/tags/publish/4.0.1-1/deb-bookworm/amd64^{}
-2222222222222222222222222222222222222222\trefs/tags/publish/4.0.1-2/deb-bookworm/amd64
-3333333333333333333333333333333333333333\trefs/tags/publish/fips-companion-4.0.1-3/rpm-el9/amd64
-4444444444444444444444444444444444444444\trefs/tags/openssl-4.0.1
-"""
+def test_the_stamp_distinguishes_publishes_of_one_version_revision():
+    """A backfill, a second architecture and a module-only publish all touch the
+    same version-revision, so the name cannot be derived from it alone."""
+    first = tag(expand("stream", EVERY), "4.0.1", "1", ["3.1.2"], "20260812T121318Z")
+    later = tag(expand("stream", EVERY), "4.0.1", "1", ["3.1.2"], "20260901T090000Z")
+    assert first != later
 
 
-def test_an_annotated_tag_is_not_counted_twice():
-    """ls-remote lists an annotated tag again, peeled to its commit."""
-    assert remote_tags(LS_REMOTE) == {
-        "publish/4.0.1-1/deb-bookworm/amd64",
-        "publish/4.0.1-2/deb-bookworm/amd64",
-        "publish/fips-companion-4.0.1-3/rpm-el9/amd64",
-        "openssl-4.0.1",
-    }
+def test_goals_naming_nothing_produce_no_tag():
+    assert tag(expand("deb-forky", EVERY), "4.0.1", "1", ["3.1.2"], STAMP) is None
 
 
-def test_a_free_tag_is_not_reported_as_taken():
-    taken, free = next_free(remote_tags(LS_REMOTE),
-                            ["publish/4.0.1-3/deb-bookworm/amd64"])
-    assert (taken, free) == ([], {})
+@pytest.mark.parametrize("goals", ["stream fips-companion", "fips-validated-publish",
+                                   "all", "deb-bookworm fips-deb-bookworm"])
+def test_every_tag_is_a_legal_ref_name(goals):
+    """Git accepts the name and no path component exceeds what a filesystem will
+    hold: a ref is stored as a path, and each component caps at 255 bytes."""
+    name = _tag(goals)
+    assert subprocess.run(["git", "check-ref-format", f"refs/tags/{name}"]).returncode == 0
+    assert all(len(part.encode()) <= 255 for part in name.split("/"))
 
 
-def test_a_published_tag_reports_the_next_free_revision_of_its_identity():
-    taken, free = next_free(remote_tags(LS_REMOTE),
-                            ["publish/4.0.1-1/deb-bookworm/amd64"])
-    assert taken == ["publish/4.0.1-1/deb-bookworm/amd64"]
-    assert free == {"publish/4.0.1": 3}
+def test_the_name_stays_short_with_many_validated_versions():
+    fips = ["3.1.2", "3.5.0", "3.7.1", "4.0.3", "4.2.0"]
+    name = _tag("all", fips=fips)
+    assert all(len(part.encode()) <= 255 for part in name.split("/"))
 
 
-def test_the_next_free_revision_is_reported_per_identity():
-    taken, free = next_free(remote_tags(LS_REMOTE),
-                            ["publish/4.0.1-2/deb-bookworm/amd64",
-                             "publish/fips-companion-4.0.1-3/rpm-el9/amd64"])
-    assert len(taken) == 2
-    assert free == {"publish/4.0.1": 3, "publish/fips-companion-4.0.1": 4}
+def test_the_annotation_records_every_package_release_and_arch():
+    lines = manifest(expand("deb-bookworm fips-deb-bookworm", EVERY), "4.0", "4.0.1",
+                     "1", ["3.1.2"], ["amd64", "arm64"])
+    assert sorted(lines) == sorted([
+        "openssl4.0-upstream 4.0.1-1 deb-bookworm amd64",
+        "openssl4.0-upstream-fips 4.0.1-1 deb-bookworm amd64",
+        "openssl-fips3.1.2-upstream 3.1.2-1 deb-bookworm amd64",
+        "openssl4.0-upstream 4.0.1-1 deb-bookworm arm64",
+        "openssl4.0-upstream-fips 4.0.1-1 deb-bookworm arm64",
+        "openssl-fips3.1.2-upstream 3.1.2-1 deb-bookworm arm64",
+    ])
 
 
-def test_an_arch_published_on_its_own_still_blocks_that_arch():
-    """A single-arch publish tags only the arch it built, so the other arch can
-    be completed later at the same revision."""
-    taken, _ = next_free(remote_tags(LS_REMOTE),
-                         ["publish/4.0.1-1/deb-bookworm/amd64",
-                          "publish/4.0.1-1/deb-bookworm/arm64"])
-    assert taken == ["publish/4.0.1-1/deb-bookworm/amd64"]
+def test_the_annotation_covers_exactly_what_the_pre_flight_checked():
+    """The record and the guard must describe the same publish: a tag claiming
+    more, or less, than was checked against the bucket would be a false record.
+    """
+    kinds = expand("all", EVERY)
+    want = wanted(kinds, "4.0", "4.0.1", ["3.1.2"], ["amd64", "arm64"])
+    lines = manifest(kinds, "4.0", "4.0.1", "1", ["3.1.2"], ["amd64", "arm64"])
+    assert len(lines) == len(want)
+    assert {(p, f"{f}-{r}", a) for p, f, r, a, _ in want} == \
+        {(line.split()[0], line.split()[2], line.split()[3]) for line in lines}
 
 
-def test_a_run_publishes_only_the_packages_its_goals_name():
-    """A validated-module publish builds the streams its modules are tested
-    against; indexing those would republish them."""
-    every = ["deb-bookworm", "rpm-el9"]
-    validated_only = expand("fips-validated-publish", every)
-    assert packages(validated_only, "4.0", ["3.1.2"]) == ["openssl-fips3.1.2-upstream"]
-
-    stream_publish = expand("stream fips-companion", every)
-    assert packages(stream_publish, "4.0", ["3.1.2"]) == [
-        "openssl4.0-upstream", "openssl4.0-upstream-fips"]
+def test_a_validated_module_is_recorded_at_its_own_version():
+    lines = manifest(expand("fips-validated-publish", EVERY), "4.0", "4.0.1", "1",
+                     ["3.1.2"], ["amd64"])
+    assert all("3.1.2-1" in line for line in lines)
+    assert not any("4.0.1" in line for line in lines)
 
 
-def test_a_backfill_publishes_every_kind_it_builds():
-    kinds = expand("deb-bookworm fips-deb-bookworm", ["deb-bookworm", "rpm-el9"])
-    assert packages(kinds, "4.0", ["3.1.2"]) == [
-        "openssl-fips3.1.2-upstream", "openssl4.0-upstream", "openssl4.0-upstream-fips"]
+def test_the_published_packages_are_the_ones_the_goals_name():
+    assert packages(expand("fips-validated-publish", EVERY), "4.0", ["3.1.2"]) == \
+        ["openssl-fips3.1.2-upstream"]
+    assert packages(expand("stream fips-companion", EVERY), "4.0", ["3.1.2"]) == \
+        ["openssl4.0-upstream", "openssl4.0-upstream-fips"]
