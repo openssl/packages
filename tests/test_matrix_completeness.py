@@ -13,7 +13,7 @@ import pytest
 from conftest import (COMPANION_REQUIRED, MATRIX, REPO, REQUIRE_TARGETS,
                       STREAM_REQUIRED, VALIDATED_REQUIRED, pkgdir, target_name,
                       _main_pkgs)
-from test_fips import (COMPANION, FIPS_VERSION, _companion_dir,
+from test_fips import (COMPANION, FIPS_VALIDATED, _companion_dir,
                        _companion_pkgs_present, _fips_dir, _fips_pkgs_present)
 
 requires_stream_targets = pytest.mark.skipif(
@@ -60,12 +60,13 @@ def test_every_target_has_packages():
 
 
 @requires_validated_targets
-def test_fips_module_packages_present():
-    missing = [f"{fam}-{rel} (looked in {_fips_dir(fam, rel)})"
+@pytest.mark.parametrize("version", FIPS_VALIDATED)
+def test_fips_module_packages_present(version):
+    missing = [f"{fam}-{rel} (looked in {_fips_dir(fam, rel, version)})"
                for fam, rel, _ in MATRIX
                if target_name(fam, rel) in VALIDATED_REQUIRED
-               and not _fips_pkgs_present(fam, rel)]
-    assert not missing, f"no FIPS {FIPS_VERSION} packages for: " + "; ".join(missing)
+               and not _fips_pkgs_present(fam, rel, version)]
+    assert not missing, f"no FIPS {version} packages for: " + "; ".join(missing)
 
 
 @requires_companion_targets
