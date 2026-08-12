@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""The publish tag: one per publish, recording what it published and from where.
+"""What a publish consists of: where it lands, what it ships, how it is recorded.
+
+Everything here is derived from the run's goals, so the bucket check, the tag and
+the repository indexes cannot disagree about what a publish covers.
 
 Not meant to be run by hand. The Makefile names the tag and renders its
 annotation; the pipeline creates it after a successful publish:
@@ -21,14 +24,37 @@ asks the bucket that, because the bucket is the real state and a tag written
 after the upload can lag it.
 """
 import argparse
-import os
 import sys
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO, "build"))
-from goals import expand  # noqa: E402
-sys.path.insert(0, os.path.join(REPO, "publish"))
-from is_published import wanted  # noqa: E402
+from _goals import expand
+
+def wanted(kinds, stream, version, fips_validated, arches):
+    """Every (package, family, release, arch, version) this run would publish.
+
+    The version is carried per entry because it differs by kind: stream packages
+    and the companion module are the stream's own version, while a validated
+    module keeps the pinned version it was built from.
+    """
+    found = []
+    for arch in arches:
+        for target in kinds["stream"]:
+            found.append((f"openssl{stream}-upstream",)
+                         + _split_target(target) + (arch, version))
+        for target in kinds["companion"]:
+            found.append((f"openssl{stream}-upstream-fips",)
+                         + _split_target(target) + (arch, version))
+        for fips_version in fips_validated:
+            for target in kinds["validated"]:
+                found.append((f"openssl-fips{fips_version}-upstream",)
+                             + _split_target(target) + (arch, fips_version))
+    return found
+
+
+def _split_target(target):
+    """(family, release) for a build target: deb-bookworm -> (deb, bookworm)."""
+    family, _, release = target.partition("-")
+    return (family, release)
+
 
 def identities(kinds, version, revision, fips_validated):
     """The version-revisions a run publishes, for the tag name.

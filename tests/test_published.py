@@ -11,10 +11,10 @@ import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "publish"))
-sys.path.insert(0, os.path.join(REPO, "build"))
-from goals import expand  # noqa: E402
+from _goals import expand  # noqa: E402
 from is_published import (RPM_ARCH, absent, collisions, parse_deb,  # noqa: E402
-                       parse_rpm, wanted)
+                          parse_rpm)
+from plan import wanted  # noqa: E402
 from conftest import ARCH, RPM_ARCH as SUITE_RPM_ARCH  # noqa: E402
 
 pytestmark = pytest.mark.unit

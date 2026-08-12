@@ -13,10 +13,9 @@ import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "publish"))
-sys.path.insert(0, os.path.join(REPO, "build"))
-from goals import expand  # noqa: E402
-from is_published import wanted  # noqa: E402
-from tags import identities, manifest, packages, releases, tag  # noqa: E402
+from _goals import expand  # noqa: E402
+from plan import (identities, manifest, packages, releases, tag,  # noqa: E402
+                  wanted)
 
 pytestmark = pytest.mark.unit
 

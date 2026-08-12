@@ -1,25 +1,16 @@
-#!/usr/bin/env python3
 """Expand make goals into the release targets they name, by package kind.
 
-Not meant to be run by hand. The Makefile calls it, passing its own release
-targets, and tests/conftest.py imports expand() directly:
-
-    $ make -s expand-goals GOALS="deb-bookworm fips-deb-bookworm"
-    STREAM_TARGETS=deb-bookworm
-    VALIDATED_TARGETS=deb-bookworm
-    COMPANION_TARGETS=deb-bookworm
+    expand("stream fips-companion", ["deb-bookworm", "rpm-el9"])
+    {"stream": [...], "validated": [], "companion": [...]}
 
 A goal can be shorthand for many releases ('stream', 'fips-deb', 'all'), so
 resolving one needs the list of releases. That list is a parameter rather than
 something defined here: the Makefile owns it, and a second copy is one more thing
 to keep in step.
 
-The test suite requires what the result names; the publishing pipeline tags it
-and indexes it. One implementation, so they cannot disagree about what a goal
-covers.
+Imported by the test suite and by the rest of publish/, so a goal means the same
+thing to what is built, what is published and what is recorded.
 """
-import sys
-
 ALL_KINDS = ("stream", "validated", "companion")
 
 # Longest prefix first: 'fips-validated-deb' also starts with 'fips-'.
@@ -53,16 +44,3 @@ def expand(goals, every):
         for kind in kinds:
             found[kind].update(hits)
     return {kind: sorted(hits) for kind, hits in found.items()}
-
-
-def main(argv):
-    if len(argv) != 4 or argv[1] != "--targets":
-        sys.exit(f'usage: make -s expand-goals GOALS="<goals>"\n'
-                 f'   or: {argv[0]} --targets "<release targets>" "<goals>"')
-    found = expand(argv[3], argv[2].split())
-    for kind in ("stream", "validated", "companion"):
-        print(f"{kind.upper()}_TARGETS={' '.join(found[kind])}")
-
-
-if __name__ == "__main__":
-    main(sys.argv)

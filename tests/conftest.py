@@ -62,8 +62,8 @@ def target_name(fam, rel):
 # packages: absent ones are a failure, not a skip. Empty requires nothing.
 REQUIRE_TARGETS = os.environ.get("REQUIRE_TARGETS", "")
 
-sys.path.insert(0, os.path.join(REPO, "build"))
-from goals import expand as expand_goals  # noqa: E402
+sys.path.insert(0, os.path.join(REPO, "publish"))
+from _goals import expand as expand_goals  # noqa: E402
 
 
 def required_targets(goals):
