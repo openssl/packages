@@ -258,8 +258,9 @@ registered once.
 make help                        # targets and the current matrix
 make deb-bookworm                # one distribution release
 make rpm-el9
-make -j3 all                     # every stream package
+make -j3 stream                  # this stream's packages, every release
 make fips                        # FIPS provider module packages
+make -j3 all                     # both of the above
 make VERSION=4.0.2 deb-bookworm  # a different upstream version
 make RUN_TESTS=1 deb-bookworm    # also run OpenSSL's own test suite
 make test                        # package tests, in clean containers

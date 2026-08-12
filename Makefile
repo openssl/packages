@@ -6,7 +6,7 @@
 #   make deb-bookworm            build one deb release
 #   make rpm-el10                build one rpm release
 #   make deb / make rpm          a whole family
-#   make -j4 all                 the whole matrix, in parallel
+#   make -j4 all                 everything, in parallel
 #   make test                    install + check in clean containers
 #   make lint ; make clean ; make help
 
@@ -78,9 +78,10 @@ FIPS_DEB_TARGETS = $(addprefix fips-,$(DEB_TARGETS))
 FIPS_RPM_TARGETS = $(addprefix fips-,$(RPM_TARGETS))
 
 .DEFAULT_GOAL := help
-.PHONY: all deb rpm fips fips-deb fips-rpm test lint clean help ci-targets ci-config $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS)
+.PHONY: all stream deb rpm fips fips-deb fips-rpm test lint clean help ci-targets ci-config $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS)
 
-all: deb rpm
+all: stream fips
+stream: deb rpm
 deb: $(DEB_TARGETS)
 rpm: $(RPM_TARGETS)
 
@@ -153,8 +154,9 @@ help:
 	@echo "openssl-packages  (STREAM=$(STREAM) VERSION=$(VERSION) ARCH=$(ARCH))"
 	@echo
 	@echo "Targets:"
-	@echo "  all                 build every stream package (deb + rpm; use -jN)"
-	@echo "  deb / rpm           build one family"
+	@echo "  all                 everything: stream packages and every module (use -jN)"
+	@echo "  stream              this stream's packages for every release"
+	@echo "  deb / rpm           one family of stream packages"
 	@echo "  deb-<suite>         one deb release, e.g. deb-bookworm"
 	@echo "  rpm-el<n>           one rpm release, e.g. rpm-el9"
 	@echo "  fips                build every FIPS module package (deb + rpm)"
