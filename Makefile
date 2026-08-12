@@ -156,7 +156,7 @@ test:
 	@mkdir -p output
 	STREAM=$(STREAM) VERSION=$(VERSION) FIPS_VERSION=$(FIPS_VERSION) \
 	    FIPS_VALIDATED="$(FIPS_VALIDATED)" REVISION=$(REVISION) \
-	    $(PYTEST) --junitxml=output/tests.xml $(PYTEST_ARGS)
+	    $(PYTEST) --junitxml=output/tests.xml --junit-prefix=$(ARCH) $(PYTEST_ARGS)
 
 # Short names depend on their (arch-specific) stamp; the stamp rule does the work.
 $(DEB_TARGETS): deb-%: $(STAMPDIR)/deb-%-$(ARCH)-$(BUILT)
