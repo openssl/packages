@@ -20,14 +20,14 @@ covers.
 """
 import sys
 
-# Builds more than it publishes: the modules need stream packages to be tested
-# against, but only the modules are published.
-ALIASES = {"fips-validated-publish": "fips-validated"}
-
 ALL_KINDS = ("stream", "validated", "companion")
 
 # Longest prefix first: 'fips-validated-deb' also starts with 'fips-'.
-KINDS = (("fips-validated", ("validated",)),
+# A '-publish' goal builds more than it publishes — the modules need stream
+# packages to be tested against — but what it publishes is the modules alone,
+# so it expands exactly as its plain counterpart does.
+KINDS = (("fips-validated-publish", ("validated",)),
+         ("fips-validated", ("validated",)),
          ("fips-companion", ("companion",)),
          ("fips", ("validated", "companion")))
 
@@ -40,7 +40,6 @@ def expand(goals, every):
               "rpm": [t for t in every if t.startswith("rpm-")]}
     found = {kind: set() for kind in ALL_KINDS}
     for goal in goals.split():
-        goal = ALIASES.get(goal, goal)
         # 'all' covers every kind, as the make target does; anything else is the
         # stream packages unless a fips- prefix says otherwise.
         kinds = ALL_KINDS if goal == "all" else ("stream",)

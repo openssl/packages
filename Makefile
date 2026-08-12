@@ -83,11 +83,14 @@ FIPS_VALID_DEB = $(addprefix fips-validated-,$(DEB_TARGETS))
 FIPS_VALID_RPM = $(addprefix fips-validated-,$(RPM_TARGETS))
 FIPS_COMP_DEB  = $(addprefix fips-companion-,$(DEB_TARGETS))
 FIPS_COMP_RPM  = $(addprefix fips-companion-,$(RPM_TARGETS))
-FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RPM)
+FIPS_VALID_PUB_DEB = $(addprefix fips-validated-publish-,$(DEB_TARGETS))
+FIPS_VALID_PUB_RPM = $(addprefix fips-validated-publish-,$(RPM_TARGETS))
+FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RPM) \
+             $(FIPS_VALID_PUB_DEB) $(FIPS_VALID_PUB_RPM)
 
 .DEFAULT_GOAL := help
 .PHONY: all stream deb rpm fips fips-deb fips-rpm fips-validated fips-companion \
-        fips-validated-publish \
+        fips-validated-publish fips-validated-publish-deb fips-validated-publish-rpm \
         fips-validated-deb fips-validated-rpm fips-companion-deb fips-companion-rpm \
         test lint clean help ci-targets ci-config expand-goals \
         $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS) $(FIPS_PARTS)
@@ -107,6 +110,12 @@ fips-companion: fips-companion-deb fips-companion-rpm
 # Everything a validated-module publish must build: the modules, plus the
 # stream packages they are tested against. Only the modules are published.
 fips-validated-publish: fips-validated stream
+fips-validated-publish-deb: fips-validated-deb deb
+fips-validated-publish-rpm: fips-validated-rpm rpm
+
+$(FIPS_VALID_PUB_DEB): fips-validated-publish-deb-%: fips-validated-deb-% deb-%
+$(FIPS_VALID_PUB_RPM): fips-validated-publish-rpm-el%: fips-validated-rpm-el% rpm-el%
+
 fips-validated-deb: $(FIPS_VALID_DEB)
 fips-validated-rpm: $(FIPS_VALID_RPM)
 fips-companion-deb: $(FIPS_COMP_DEB)
@@ -201,7 +210,7 @@ help:
 	@echo "  fips-<target>       both module kinds for one release"
 	@echo "  fips-validated[-…]  pinned validated modules only"
 	@echo "  fips-companion[-…]  the stream's companion module only"
-	@echo "  fips-validated-publish  validated modules + the streams they test against"
+	@echo "  fips-validated-publish[-…]  validated modules + the streams they test against"
 	@echo "  test                run the package test suite (pytest, in containers)"
 	@echo "  lint                shellcheck the shell scripts and templates"
 	@echo "  clean               remove built packages and stamps"
