@@ -20,6 +20,11 @@ from conftest import (MATRIX, STREAM, ARCH, DATADIR, DEB_ARCH, RPM_ARCH, REPO,
 
 FIPS_VERSION = os.environ.get("FIPS_VERSION", "3.1.2")
 
+# Every pinned version the build produces, not just the one the tests exercise
+# by default: the presence checks have to cover all of them or a missing module
+# publishes unnoticed.
+FIPS_VALIDATED = os.environ.get("FIPS_VALIDATED", FIPS_VERSION).split()
+
 # Every release we publish for: the module has to install and load on all of them.
 FIPS_TARGETS = MATRIX
 
@@ -83,9 +88,12 @@ def _companion_pkgs_present(fam, rel):
     return bool(glob.glob(_companion_pkg_glob(fam, rel)))
 
 
-def _fips_install_script(fam, with_companion):
-    # binutils supplies readelf, for the module's ELF properties. The companion
-    # package rides along when built for this release.
+def _fips_install_script(fam, with_validated, with_companion):
+    # binutils supplies readelf, for the module's ELF properties. Each module
+    # kind rides along when built for this release: a run publishing only the
+    # companion still has to load and activate it.
+    validated_deb = f"/fips/openssl-fips{FIPS_VERSION}-upstream_*_{DEB_ARCH}.deb "
+    validated_rpm = f"/fips/openssl-fips{FIPS_VERSION}-upstream-*.{RPM_ARCH}.rpm "
     companion_deb = f"/fips-companion/openssl{STREAM}-upstream-fips_*_{DEB_ARCH}.deb"
     companion_rpm = f"/fips-companion/openssl{STREAM}-upstream-fips-[0-9]*.{RPM_ARCH}.rpm"
     if fam == "deb":
@@ -94,20 +102,21 @@ def _fips_install_script(fam, with_companion):
             f" apt-get {APT_OPTS} update -qq >/dev/null; "
             f"apt-get {APT_OPTS} install -y --no-install-recommends binutils "
             f"/pkgs/openssl{STREAM}-upstream_*_{DEB_ARCH}.deb "
-            f"/fips/openssl-fips{FIPS_VERSION}-upstream_*_{DEB_ARCH}.deb "
+            + (validated_deb if with_validated else "")
             + (companion_deb if with_companion else "") + " >/dev/null 2>&1"
         )
     return (
         f"set -e; dnf install -y -q {DNF_OPTS} binutils "
         f"/pkgs/openssl{STREAM}-upstream-*.{RPM_ARCH}.rpm "
-        f"/fips/openssl-fips{FIPS_VERSION}-upstream-*.{RPM_ARCH}.rpm "
+        + (validated_rpm if with_validated else "")
         + (companion_rpm if with_companion else "") + " >/dev/null 2>&1"
     )
 
 
 class FipsTarget:
-    def __init__(self, family, cid, companion_installed=False):
+    def __init__(self, family, cid, validated_installed=False, companion_installed=False):
         self.family, self.cid = family, cid
+        self.validated_installed = validated_installed
         self.companion_installed = companion_installed
         self.stream = STREAM
         self.prefix = f"/opt/openssl/{STREAM}"
@@ -124,29 +133,42 @@ class FipsTarget:
         return self.run(cmd, check=True).stdout.strip()
 
 
+def _needs_validated(t):
+    if not t.validated_installed:
+        pytest.skip(f"validated module {FIPS_VERSION} not built for this run")
+
+
 @pytest.fixture(scope="module",
                 params=FIPS_TARGETS,
                 ids=[f"{f}-{r}" for f, r, _ in FIPS_TARGETS])
 def fips_target(request):
     fam, rel, image = request.param
-    if not _fips_pkgs_present(fam, rel):
-        pytest.skip(f"FIPS {FIPS_VERSION} packages for {fam}-{rel} not built")
+    # Either module kind is enough to be worth testing: a run may publish only
+    # the companion, and gating on the validated module would silently skip it.
+    with_validated = _fips_pkgs_present(fam, rel)
+    with_companion = _companion_pkgs_present(fam, rel)
+    if not (with_validated or with_companion):
+        pytest.skip(f"no FIPS module packages for {fam}-{rel}")
     if not glob.glob(os.path.join(pkgdir(fam, rel), f"openssl{STREAM}-upstream*")):
         pytest.skip(f"stream {STREAM} packages for {fam}/{rel} not built")
-    with_companion = _companion_pkgs_present(fam, rel)
-    mounts = {pkgdir(fam, rel): "/pkgs", _fips_dir(fam, rel): "/fips", DATADIR: "/testdata"}
+    mounts = {pkgdir(fam, rel): "/pkgs", DATADIR: "/testdata"}
+    if with_validated:
+        mounts[_fips_dir(fam, rel)] = "/fips"
     if with_companion:
         mounts[_companion_dir(fam, rel)] = "/fips-companion"
     cid = install_packages(image, mounts,
-                          _fips_install_script(fam, with_companion), f"fips {fam}-{rel}")
+                           _fips_install_script(fam, with_validated, with_companion),
+                           f"fips {fam}-{rel}")
     try:
-        yield FipsTarget(fam, cid, companion_installed=with_companion)
+        yield FipsTarget(fam, cid, validated_installed=with_validated,
+                         companion_installed=with_companion)
     finally:
         remove_container(cid)
 
 
 def test_module_installed(fips_target):
     t = fips_target
+    _needs_validated(t)
     assert t.run(f"test -e /opt/openssl/fips/{FIPS_VERSION}/fips.so").returncode == 0
     assert t.run(f"test -x {t.helper}").returncode == 0
 
@@ -154,6 +176,7 @@ def test_module_installed(fips_target):
 def test_helper_list_reports_validation_status(fips_target):
     """`list` shows each installed module and whether it is NIST-validated."""
     t = fips_target
+    _needs_validated(t)
     out = t.out(f"{t.helper} list")
     assert t.stream in out and FIPS_VERSION in out, out
     # 3.1.2 ships a 'validated' marker naming its CMVP certificate.
@@ -196,6 +219,7 @@ def test_enable_and_provider_loads(fips_target):
     """The crux: fipsinstall + the module loading under this stream's libcrypto,
     selected by absolute path (config 'module' key), with nothing symlinked."""
     t = fips_target
+    _needs_validated(t)
     en = t.run(f"{t.helper} {FIPS_VERSION}")
     assert en.returncode == 0, f"enable failed:\n{en.stdout}\n{en.stderr}"
     providers = t.run(f"{t.ossl} list -providers")
@@ -209,6 +233,7 @@ def test_enable_and_provider_loads(fips_target):
 
 def test_fips_enforces_approved_only(fips_target):
     t = fips_target
+    _needs_validated(t)
     t.run(f"{t.helper} {FIPS_VERSION}", check=True)
     ok = t.run(f"printf abc | {t.ossl} dgst -sha256")
     assert ok.returncode == 0, f"sha256 should work in FIPS mode:\n{ok.stderr}"
@@ -223,6 +248,7 @@ def test_fips_loads_via_env_without_touching_system_config(fips_target):
     untouched. Proves the module works independently of our activation helper.
     """
     t = fips_target
+    _needs_validated(t)
     installed_cnf = f"/etc/opt/openssl/{t.stream}/openssl.cnf"
     before = t.run(f"cat {installed_cnf}").stdout
     script = f'''set -e
@@ -266,6 +292,7 @@ def module_bytes_restored(fips_target):
 def test_verify_detects_stale_config(fips_target, module_bytes_restored):
     """`verify` confirms a good config and fails once the module changes."""
     t = fips_target
+    _needs_validated(t)
     module = module_bytes_restored
     t.run(f"{t.helper} {FIPS_VERSION}", check=True)
     ok = t.run(f"{t.helper} verify")
@@ -279,6 +306,7 @@ def test_verify_detects_stale_config(fips_target, module_bytes_restored):
 
 def test_disable_restores_default(fips_target):
     t = fips_target
+    _needs_validated(t)
     t.run(f"{t.helper} {FIPS_VERSION}", check=True)
     t.run(f"{t.helper} disable", check=True)
     assert t.run(f"printf abc | {t.ossl} dgst -md5").returncode == 0
@@ -293,6 +321,7 @@ def test_module_elf_properties(fips_target):
     packaging passes.
     """
     t = fips_target
+    _needs_validated(t)
     module = f"/opt/openssl/fips/{FIPS_VERSION}/fips.so"
     dyn = t.out(f"readelf -dW {module}")
     assert "RUNPATH" not in dyn and "RPATH" not in dyn, dyn
@@ -313,6 +342,7 @@ def test_module_carries_the_distribution_link_flags(fips_target):
     this pass rather than leaving a stale expected failure.
     """
     t = fips_target
+    _needs_validated(t)
     dyn = t.out(f"readelf -dW /opt/openssl/fips/{FIPS_VERSION}/fips.so")
     if t.family == "deb" and "BIND_NOW" not in dyn:
         pytest.xfail("deb-fips rules do not export dpkg-buildflags; see the docstring")
