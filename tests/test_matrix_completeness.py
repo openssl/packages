@@ -2,22 +2,31 @@
 
 The per-target fixtures skip when packages are absent, which makes a partial
 local build usable but would let an incomplete artifact download report success.
-REQUIRE_ALL_TARGETS=1 makes absence a failure. The matrix-vs-Makefile check
-needs no packages and always runs.
+REQUIRE_TARGETS names the make goals the run built, and absence of anything they
+name is a failure. The matrix-vs-Makefile check needs no packages and always runs.
 """
-import os
 import shutil
 import subprocess
 
 import pytest
 
-from conftest import MATRIX, REPO, pkgdir, target_name, _main_pkgs
+from conftest import (COMPANION_REQUIRED, MATRIX, REPO, REQUIRE_TARGETS,
+                      STREAM_REQUIRED, VALIDATED_REQUIRED, pkgdir, target_name,
+                      _main_pkgs)
 from test_fips import (COMPANION, FIPS_VERSION, _companion_dir,
                        _companion_pkgs_present, _fips_dir, _fips_pkgs_present)
 
-requires_full_matrix = pytest.mark.skipif(
-    not os.environ.get("REQUIRE_ALL_TARGETS"),
-    reason="set REQUIRE_ALL_TARGETS=1 to require the whole matrix",
+requires_stream_targets = pytest.mark.skipif(
+    not STREAM_REQUIRED,
+    reason=f"REQUIRE_TARGETS={REQUIRE_TARGETS!r} names no stream packages",
+)
+requires_validated_targets = pytest.mark.skipif(
+    not VALIDATED_REQUIRED,
+    reason=f"REQUIRE_TARGETS={REQUIRE_TARGETS!r} names no validated FIPS modules",
+)
+requires_companion_targets = pytest.mark.skipif(
+    not COMPANION_REQUIRED,
+    reason=f"REQUIRE_TARGETS={REQUIRE_TARGETS!r} names no companion FIPS modules",
 )
 
 
@@ -42,23 +51,28 @@ def test_matrix_matches_makefile_targets():
         f"tested but never built: {sorted(tested - built)}")
 
 
-@requires_full_matrix
+@requires_stream_targets
 def test_every_target_has_packages():
     missing = [f"{fam}-{rel} (looked in {pkgdir(fam, rel)})"
-               for fam, rel, _ in MATRIX if not _main_pkgs(fam, rel)]
+               for fam, rel, _ in MATRIX
+               if target_name(fam, rel) in STREAM_REQUIRED and not _main_pkgs(fam, rel)]
     assert not missing, "no packages for: " + "; ".join(missing)
 
 
-@requires_full_matrix
+@requires_validated_targets
 def test_fips_module_packages_present():
     missing = [f"{fam}-{rel} (looked in {_fips_dir(fam, rel)})"
-               for fam, rel, _ in MATRIX if not _fips_pkgs_present(fam, rel)]
+               for fam, rel, _ in MATRIX
+               if target_name(fam, rel) in VALIDATED_REQUIRED
+               and not _fips_pkgs_present(fam, rel)]
     assert not missing, f"no FIPS {FIPS_VERSION} packages for: " + "; ".join(missing)
 
 
-@requires_full_matrix
+@requires_companion_targets
 def test_companion_fips_module_packages_present():
     missing = [f"{fam}-{rel} (looked in {_companion_dir(fam, rel)})"
-               for fam, rel, _ in MATRIX if not _companion_pkgs_present(fam, rel)]
+               for fam, rel, _ in MATRIX
+               if target_name(fam, rel) in COMPANION_REQUIRED
+               and not _companion_pkgs_present(fam, rel)]
     assert not missing, \
         f"no companion FIPS module for stream {COMPANION}: " + "; ".join(missing)

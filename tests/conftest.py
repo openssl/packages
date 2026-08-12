@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -50,6 +51,34 @@ MATRIX = [
 def target_name(fam, rel):
     """The Makefile target that builds this matrix entry."""
     return f"deb-{rel}" if fam == "deb" else f"rpm-el{rel}"
+
+
+# The make goals this run built, verbatim. Whatever they name must have
+# packages: absent ones are a failure, not a skip. Empty requires nothing.
+REQUIRE_TARGETS = os.environ.get("REQUIRE_TARGETS", "")
+
+sys.path.insert(0, os.path.join(REPO, "build"))
+from goals import expand as expand_goals  # noqa: E402
+
+
+def required_targets(goals):
+    """The targets that must have stream packages, validated FIPS modules and
+    companion FIPS modules. What each goal covers comes from build/goals.py, the
+    same expansion the publishing pipeline uses.
+
+    Requiring a module also requires that release's stream packages: a module is
+    only ever exercised inside a stream install, so building one without the
+    other tests nothing. Publishing does not imply this — the pipeline tags only
+    what its goals name.
+    """
+    found = expand_goals(goals, [target_name(fam, rel) for fam, rel, _ in MATRIX])
+    stream = set(found["stream"])
+    validated, companion = set(found["validated"]), set(found["companion"])
+    return stream | validated | companion, validated, companion
+
+
+STREAM_REQUIRED, VALIDATED_REQUIRED, COMPANION_REQUIRED = \
+    required_targets(REQUIRE_TARGETS)
 
 
 def pkgdir(fam, rel, stream=STREAM):
