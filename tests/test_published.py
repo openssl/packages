@@ -10,7 +10,7 @@ import sys
 import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO, "publish"))
+sys.path.insert(0, os.path.join(REPO, "lib"))
 from _goals import expand  # noqa: E402
 from is_published import (RPM_ARCH, absent, collisions, parse_deb,  # noqa: E402
                           parse_rpm)

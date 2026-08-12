@@ -7,9 +7,9 @@ the repository indexes cannot disagree about what a publish covers.
 Not meant to be run by hand. The Makefile names the tag and renders its
 annotation; the pipeline creates it after a successful publish:
 
-    $ make -s publish-tags GOALS="stream fips-companion" STAMP=20260812T121318Z
+    $ make -s plan-tag GOALS="stream fips-companion" STAMP=20260812T121318Z
     publish/4.0.1-1/20260812T121318Z
-    $ make -s publish-manifest GOALS="stream fips-companion" ARCHES="amd64 arm64"
+    $ make -s plan-manifest GOALS="stream fips-companion" ARCHES="amd64 arm64"
     openssl4.0-upstream 4.0.1-1 deb-bookworm amd64
     …
 
@@ -19,7 +19,7 @@ publish can all touch the same version-revision. Everything else — the goals,
 and every package, release and architecture the run published — goes in the
 annotation, which has no length limit worth worrying about.
 
-The tag no longer decides whether a publish may proceed. publish/is_published.py
+The tag no longer decides whether a publish may proceed. lib/is_published.py
 asks the bucket that, because the bucket is the real state and a tag written
 after the upload can lag it.
 """

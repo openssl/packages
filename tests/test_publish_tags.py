@@ -1,6 +1,6 @@
 """The publish tag: one per publish, recording what it published.
 
-The tag is a record, not a gate — publish/is_published.py asks the bucket whether
+The tag is a record, not a gate — lib/is_published.py asks the bucket whether
 a publish may proceed. So these check that the name is unique per publish and
 honest about what it names, and that the annotation carries the detail the name
 no longer does.
@@ -12,7 +12,7 @@ import sys
 import pytest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO, "publish"))
+sys.path.insert(0, os.path.join(REPO, "lib"))
 from _goals import expand  # noqa: E402
 from plan import (identities, manifest, packages, releases, tag,  # noqa: E402
                   wanted)

@@ -104,7 +104,7 @@ FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RP
 .PHONY: all stream deb rpm fips fips-deb fips-rpm fips-validated fips-companion \
         fips-validated-publish fips-validated-publish-deb fips-validated-publish-rpm \
         fips-validated-deb fips-validated-rpm fips-companion-deb fips-companion-rpm \
-        test lint clean help ci-targets ci-config publish-tags publish-manifest publish-packages publish-releases publish-check \
+        test lint clean help ci-targets ci-config plan-tag plan-manifest plan-packages plan-releases check-published \
         $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS) $(FIPS_PARTS)
 
 all: stream fips
@@ -197,14 +197,14 @@ ARCHES ?= $(ARCH)
 # STAMP is what makes the name unique per publish: a backfill, a second
 # architecture and a module-only publish all touch the same version-revision.
 STAMP ?=
-publish-tags:
-	@publish/plan.py name --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
+plan-tag:
+	@lib/plan.py name --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
 	    --version "$(VERSION)" --revision "$(REVISION)" \
 	    --fips-validated "$(FIPS_VALIDATED)" --stamp "$(STAMP)"
 
 # What the tag's annotation records: every package, release and arch published.
-publish-manifest:
-	@publish/plan.py manifest --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
+plan-manifest:
+	@lib/plan.py manifest --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
 	    --stream "$(STREAM)" --version "$(VERSION)" --revision "$(REVISION)" \
 	    --fips-validated "$(FIPS_VALIDATED)" --arches "$(ARCHES)"
 
@@ -212,20 +212,20 @@ publish-manifest:
 # publish. The bucket is the real state: tags are written after the upload, so a
 # publish whose tag push failed leaves them behind reality.
 BUCKET ?=
-publish-check:
-	@publish/is_published.py check --bucket "$(BUCKET)" \
+check-published:
+	@lib/is_published.py check --bucket "$(BUCKET)" \
 	    --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
 	    --arches "$(ARCHES)" --version "$(VERSION)" --revision "$(REVISION)" \
 	    --stream "$(STREAM)" --fips-validated "$(FIPS_VALIDATED)"
 
 # The releases those goals publish, whose repository indexes have to be
-publish-releases:
-	@publish/plan.py releases --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)"
+plan-releases:
+	@lib/plan.py releases --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)"
 
 # The source packages those goals publish, which is not everything the run
 # builds: a validated-module publish builds streams only to test against.
-publish-packages:
-	@publish/plan.py packages --targets "$(DEB_TARGETS) $(RPM_TARGETS)" \
+plan-packages:
+	@lib/plan.py packages --targets "$(DEB_TARGETS) $(RPM_TARGETS)" \
 	    --goals "$(GOALS)" --stream "$(STREAM)" --fips-validated "$(FIPS_VALIDATED)"
 
 # One target name per line, for CI to build its job matrix from.

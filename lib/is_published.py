@@ -4,13 +4,13 @@
 Not meant to be run by hand. The Makefile lists what a run would publish and the
 publishing pipeline checks it against the bucket:
 
-    $ publish/is_published.py check --bucket gs://… --targets "…" --goals "…" \
+    $ lib/is_published.py check --bucket gs://… --targets "…" --goals "…" \
           --arches "amd64 arm64" --version 4.0.1 --revision 1 --stream 4.0 \
           --fips-validated 3.1.2
 
 A published file keeps its bytes forever, and builds are not reproducible, so
 rebuilding an already-published version-revision produces different bytes for a
-name that cannot be rewritten. make-repo.sh refuses that at the point of copying,
+name that cannot be rewritten. publish/make-repo.sh refuses that at the point of copying,
 but only after a full build; this asks the same question of the bucket first.
 
 The bucket is the real state. Tags record what was published, but they are
