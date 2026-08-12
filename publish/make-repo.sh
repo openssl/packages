@@ -2,17 +2,37 @@
 # Regenerate the apt and dnf indexes for the slice of the published repository
 # that a publish invalidates.
 #
-#   publish/make-repo.sh <bucket-url> <repo-dir> <package-dir> <target>...
+#   publish/make-repo.sh --packages "<name>..." \
+#       <bucket-url> <repo-dir> <package-dir> <target>...
 #
-#   publish/make-repo.sh gs://some-bucket repo output deb-bookworm rpm-el9
-#   REPO_PACKAGES="openssl-fips3.1.2-upstream" publish/make-repo.sh …
+#   publish/make-repo.sh --packages "$(make -s plan-packages GOALS=stream)" \
+#       gs://some-bucket repo output deb-bookworm rpm-el9
 set -euo pipefail
 
-BUCKET=${1:?usage: make-repo.sh <bucket-url> <repo-dir> <package-dir> <target>...}
-REPO=${2:?usage: make-repo.sh <bucket-url> <repo-dir> <package-dir> <target>...}
-PKGDIR=${3:?usage: make-repo.sh <bucket-url> <repo-dir> <package-dir> <target>...}
+USAGE='usage: make-repo.sh --packages "<name>..." <bucket-url> <repo-dir> <package-dir> <target>...'
+
+# Which source packages to index. Required, and an argument rather than one of
+# the REPO_* overrides below: those are deployment settings with sane defaults,
+# while this decides what reaches the repository and differs every run. A run
+# can build more than it publishes — a validated-module publish builds the
+# streams its modules are tested against — so a forgotten value must be an error
+# and not "index whatever the build left behind".
+PACKAGES=
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --packages) PACKAGES=${2:?$USAGE}; shift 2 ;;
+        --) shift; break ;;
+        -*) echo "unknown option $1" >&2; echo "$USAGE" >&2; exit 1 ;;
+        *) break ;;
+    esac
+done
+[ -n "$PACKAGES" ] || { echo "--packages is required" >&2; echo "$USAGE" >&2; exit 1; }
+
+BUCKET=${1:?$USAGE}
+REPO=${2:?$USAGE}
+PKGDIR=${3:?$USAGE}
 shift 3
-[ $# -gt 0 ] || { echo "no targets given" >&2; exit 1; }
+[ $# -gt 0 ] || { echo "no targets given" >&2; echo "$USAGE" >&2; exit 1; }
 
 ORIGIN=${REPO_ORIGIN:-OpenSSL}
 LABEL=${REPO_LABEL:-OpenSSL}
@@ -20,11 +40,6 @@ DESCRIPTION=${REPO_DESCRIPTION:-OpenSSL upstream packages}
 COMPONENT=${REPO_COMPONENT:-main}
 DEB_ARCHES=${REPO_DEB_ARCHES:-amd64 arm64}
 RPM_ARCHES=${REPO_RPM_ARCHES:-x86_64 aarch64}
-# The source packages to index. A run can build more than it publishes — a
-# validated-module publish builds the streams its modules are tested against —
-# so indexing whatever the build left behind would republish them. Empty means
-# everything present, which is what a local run wants.
-PACKAGES=${REPO_PACKAGES:-}
 
 # An absent prefix is the first publish, not an error.
 sync_down() {

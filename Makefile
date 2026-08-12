@@ -162,6 +162,7 @@ test:
 	STREAM=$(STREAM) VERSION=$(VERSION) FIPS_VERSION=$(FIPS_VERSION) \
 	    PACKAGING_COMMIT=$(PACKAGING_COMMIT) \
 	    FIPS_VALIDATED="$(FIPS_VALIDATED)" REVISION=$(REVISION) \
+	    REQUIRE_TARGETS="$(REQUIRE_TARGETS)" \
 	    $(PYTEST) --junitxml=output/tests.xml --junit-prefix=$(ARCH) $(PYTEST_ARGS)
 
 # Short names depend on their (arch-specific) stamp; the stamp rule does the work.
