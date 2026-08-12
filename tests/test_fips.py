@@ -280,6 +280,8 @@ def module_bytes_restored(fips_target):
     clear failure into a run of confusing ones.
     """
     t = fips_target
+    # A fixture runs before the test body, so the body's own guard is too late.
+    _needs_validated(t)
     module = f"/opt/openssl/fips/{FIPS_VERSION}/fips.so"
     t.run(f"cp {module} /tmp/fips.so.orig", check=True)
     try:
