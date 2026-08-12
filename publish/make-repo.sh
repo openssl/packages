@@ -29,17 +29,13 @@ sync_down() {
     fi
 }
 
-# Packages built for one release live under <pkg>/<family>/<release>/. A FIPS
-# module is built once for a whole family and sits flat under <pkg>/<family>/,
-# because one build serves every release in that family — so it is placed into
-# each of them. Prints "<package-name><TAB><source-directory>".
+# Every package, FIPS modules included, is built per release and lives under
+# <pkg>/<family>/<release>/. Prints "<package-name><TAB><source-directory>".
 sources() {
     local family=$1 release=$2 pkgdir
     while IFS= read -r pkgdir; do
         if [ -d "$pkgdir/$family/$release" ]; then
             printf '%s\t%s\n' "$(basename "$pkgdir")" "$pkgdir/$family/$release"
-        elif find "$pkgdir/$family" -maxdepth 1 -type f 2>/dev/null | grep -q .; then
-            printf '%s\t%s\n' "$(basename "$pkgdir")" "$pkgdir/$family"
         fi
     done < <(find "$PKGDIR" -mindepth 1 -maxdepth 1 -type d | sort)
 }
