@@ -89,7 +89,7 @@ FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RP
 .PHONY: all stream deb rpm fips fips-deb fips-rpm fips-validated fips-companion \
         fips-validated-publish \
         fips-validated-deb fips-validated-rpm fips-companion-deb fips-companion-rpm \
-        test lint clean help ci-targets ci-config \
+        test lint clean help ci-targets ci-config expand-goals \
         $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS) $(FIPS_PARTS)
 
 all: stream fips
@@ -165,6 +165,12 @@ SHELL_SRCS = $(shell git ls-files '*.sh' 2>/dev/null || find build packaging -na
 lint:
 	podman run --rm -v "$(CURDIR)":/mnt:ro -w /mnt docker.io/koalaman/shellcheck:stable \
 	    --shell=bash --external-sources $(SHELL_SRCS)
+
+# Which release targets a set of goals names, by package kind. The test suite
+# and the publishing pipeline both read this rather than reimplementing it.
+GOALS ?=
+expand-goals:
+	@build/goals.py --targets "$(DEB_TARGETS) $(RPM_TARGETS)" "$(GOALS)"
 
 # One target name per line, for CI to build its job matrix from.
 ci-targets:
