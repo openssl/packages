@@ -5,6 +5,7 @@
 #   publish/make-repo.sh <bucket-url> <repo-dir> <package-dir> <target>...
 #
 #   publish/make-repo.sh gs://some-bucket repo output deb-bookworm rpm-el9
+#   REPO_PACKAGES="openssl-fips3.1.2-upstream" publish/make-repo.sh …
 set -euo pipefail
 
 BUCKET=${1:?usage: make-repo.sh <bucket-url> <repo-dir> <package-dir> <target>...}
@@ -19,6 +20,11 @@ DESCRIPTION=${REPO_DESCRIPTION:-OpenSSL upstream packages}
 COMPONENT=${REPO_COMPONENT:-main}
 DEB_ARCHES=${REPO_DEB_ARCHES:-amd64 arm64}
 RPM_ARCHES=${REPO_RPM_ARCHES:-x86_64 aarch64}
+# The source packages to index. A run can build more than it publishes — a
+# validated-module publish builds the streams its modules are tested against —
+# so indexing whatever the build left behind would republish them. Empty means
+# everything present, which is what a local run wants.
+PACKAGES=${REPO_PACKAGES:-}
 
 # An absent prefix is the first publish, not an error.
 sync_down() {
@@ -32,27 +38,36 @@ sync_down() {
 # Every package, FIPS modules included, is built per release and lives under
 # <pkg>/<family>/<release>/. Prints "<package-name><TAB><source-directory>".
 sources() {
-    local family=$1 release=$2 pkgdir
+    local family=$1 release=$2 pkgdir name
     while IFS= read -r pkgdir; do
+        name=$(basename "$pkgdir")
+        if [ -n "$PACKAGES" ]; then
+            case " $PACKAGES " in *" $name "*) ;; *) continue ;; esac
+        fi
         if [ -d "$pkgdir/$family/$release" ]; then
-            printf '%s\t%s\n' "$(basename "$pkgdir")" "$pkgdir/$family/$release"
+            printf '%s\t%s\n' "$name" "$pkgdir/$family/$release"
         fi
     done < <(find "$PKGDIR" -mindepth 1 -maxdepth 1 -type d | sort)
 }
 
 # The pool is per suite
 make_deb_suite() {
-    local suite=$1 pool="$REPO/deb/pool/$1" dists="$REPO/deb/dists/$1" pkg dir arch d f
+    local suite=$1 pool="$REPO/deb/pool/$1" dists="$REPO/deb/dists/$1" pkg dir arch d f added
 
     sync_down "$BUCKET/deb/pool/$suite" "$pool"
     sync_down "$BUCKET/deb/dists/$suite" "$dists"
 
     # The pool holds both architectures; apt-ftparchive --arch splits them at
     # index time (and includes Architecture: all in each).
+    added=""
     while IFS=$'\t' read -r pkg dir; do
         mkdir -p "$pool/$COMPONENT/o/$pkg"
         cp -f "$dir"/* "$pool/$COMPONENT/o/$pkg/"
+        added="$added $pkg"
     done < <(sources deb "$suite")
+    # What this run contributes, as opposed to what the pool already held: an
+    # empty list, or a package nobody meant to publish, is only visible here.
+    echo "== $suite: adding${added:- nothing}"
 
     for arch in $DEB_ARCHES; do
         d="$dists/$COMPONENT/binary-$arch"
@@ -85,7 +100,7 @@ make_deb_suite() {
 }
 
 make_rpm_repo() {
-    local el=$1 basearch pkg dir r
+    local el=$1 basearch pkg dir r added n
 
     for basearch in $RPM_ARCHES; do
         r="$REPO/rpm/$el/$basearch"
@@ -94,11 +109,16 @@ make_rpm_repo() {
 
         # createrepo_c indexes the whole directory, so unlike the deb pool this
         # one has to hold a single architecture.
+        added=""
         while IFS=$'\t' read -r pkg dir; do
-            find "$dir" -maxdepth 1 -type f \
+            n=$(find "$dir" -maxdepth 1 -type f \
                 \( -name "*.$basearch.rpm" -o -name '*.noarch.rpm' \) \
-                -exec cp -f {} "$r/" \;
+                -exec cp -f {} "$r/" \; -print | wc -l)
+            if [ "$n" -gt 0 ]; then added="$added $pkg"; fi
         done < <(sources rpm "$el")
+        # Nothing for this arch is normal on a single-arch publish; a package
+        # nobody meant to publish is not, and this is where it shows.
+        echo "== $el/$basearch: adding${added:- nothing}"
 
         createrepo_c --quiet --update --general-compress-type=gz "$r"
         echo "== $el/$basearch: $(find "$r" -maxdepth 1 -name '*.rpm' | wc -l) packages"

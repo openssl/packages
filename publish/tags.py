@@ -53,6 +53,23 @@ def tags(kinds, arches, version, revision, fips_validated):
     return found
 
 
+def packages(kinds, stream, fips_validated):
+    """The source packages a run publishes, as they are named in output/.
+
+    A run may build more than it publishes — a validated-module publish builds
+    the stream packages its modules are tested against — so the repository is
+    told what to index rather than taking whatever the build left behind.
+    """
+    found = set()
+    if kinds["stream"]:
+        found.add(f"openssl{stream}-upstream")
+    if kinds["companion"]:
+        found.add(f"openssl{stream}-upstream-fips")
+    if kinds["validated"]:
+        found.update(f"openssl-fips{v}-upstream" for v in fips_validated)
+    return sorted(found)
+
+
 def split(tag):
     """(identity, revision) for a publish tag, None for any other ref."""
     m = TAG.match(tag)
@@ -98,6 +115,12 @@ def cmd_list(args):
         print(tag)
 
 
+def cmd_packages(args):
+    kinds = expand(args.goals, args.targets.split())
+    for package in packages(kinds, args.stream, args.fips_validated.split()):
+        print(package)
+
+
 def cmd_check(args):
     ls = subprocess.run(["git", "ls-remote", "--tags", args.repo],
                         capture_output=True, text=True)
@@ -126,6 +149,13 @@ def main(argv):
     lister.add_argument("--revision", required=True)
     lister.add_argument("--fips-validated", required=True, help="pinned module versions")
     lister.set_defaults(run=cmd_list)
+
+    lister = sub.add_parser("packages", help="the source packages a run publishes")
+    lister.add_argument("--targets", required=True, help="every release target")
+    lister.add_argument("--goals", required=True, help="the make goals the run builds")
+    lister.add_argument("--stream", required=True)
+    lister.add_argument("--fips-validated", required=True, help="pinned module versions")
+    lister.set_defaults(run=cmd_packages)
 
     checker = sub.add_parser("check", help="fail if any of these tags is published already")
     checker.add_argument("--repo", required=True, help="git URL of openssl/packages")

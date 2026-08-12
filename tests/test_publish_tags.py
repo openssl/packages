@@ -11,7 +11,8 @@ import pytest
 from conftest import REPO
 
 sys.path.insert(0, os.path.join(REPO, "publish"))
-from tags import next_free, remote_tags, split, tags  # noqa: E402
+from goals import expand  # noqa: E402
+from tags import packages, next_free, remote_tags, split, tags  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
@@ -116,3 +117,21 @@ def test_an_arch_published_on_its_own_still_blocks_that_arch():
                          ["publish/4.0.1-1/deb-bookworm/amd64",
                           "publish/4.0.1-1/deb-bookworm/arm64"])
     assert taken == ["publish/4.0.1-1/deb-bookworm/amd64"]
+
+
+def test_a_run_publishes_only_the_packages_its_goals_name():
+    """A validated-module publish builds the streams its modules are tested
+    against; indexing those would republish them."""
+    every = ["deb-bookworm", "rpm-el9"]
+    validated_only = expand("fips-validated-publish", every)
+    assert packages(validated_only, "4.0", ["3.1.2"]) == ["openssl-fips3.1.2-upstream"]
+
+    stream_publish = expand("stream fips-companion", every)
+    assert packages(stream_publish, "4.0", ["3.1.2"]) == [
+        "openssl4.0-upstream", "openssl4.0-upstream-fips"]
+
+
+def test_a_backfill_publishes_every_kind_it_builds():
+    kinds = expand("deb-bookworm fips-deb-bookworm", ["deb-bookworm", "rpm-el9"])
+    assert packages(kinds, "4.0", ["3.1.2"]) == [
+        "openssl-fips3.1.2-upstream", "openssl4.0-upstream", "openssl4.0-upstream-fips"]

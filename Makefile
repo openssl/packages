@@ -92,7 +92,7 @@ FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RP
 .PHONY: all stream deb rpm fips fips-deb fips-rpm fips-validated fips-companion \
         fips-validated-publish fips-validated-publish-deb fips-validated-publish-rpm \
         fips-validated-deb fips-validated-rpm fips-companion-deb fips-companion-rpm \
-        test lint clean help ci-targets ci-config expand-goals publish-tags \
+        test lint clean help ci-targets ci-config expand-goals publish-tags publish-packages \
         $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS) $(FIPS_PARTS)
 
 all: stream fips
@@ -188,6 +188,12 @@ publish-tags:
 	@publish/tags.py list --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
 	    --arches "$(ARCHES)" --version "$(VERSION)" --revision "$(REVISION)" \
 	    --fips-validated "$(FIPS_VALIDATED)"
+
+# The source packages those goals publish, which is not everything the run
+# builds: a validated-module publish builds streams only to test against.
+publish-packages:
+	@publish/tags.py packages --targets "$(DEB_TARGETS) $(RPM_TARGETS)" \
+	    --goals "$(GOALS)" --stream "$(STREAM)" --fips-validated "$(FIPS_VALIDATED)"
 
 # One target name per line, for CI to build its job matrix from.
 ci-targets:
