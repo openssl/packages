@@ -161,7 +161,8 @@ def cmd_check(args):
     want = wanted(kinds, args.stream, args.version, args.fips_validated.split(),
                   args.arches.split())
     if not want:
-        sys.exit(f"Nothing to publish: '{args.goals}' names no build target.")
+        sys.exit(f"Nothing to publish: '{args.goals}' names no build target. "
+                 f"Valid targets: {args.targets}")
     objects = listing(args.bucket, "deb/pool") + listing(args.bucket, "rpm")
     taken = collisions(objects, want, args.revision)
     if not taken:
