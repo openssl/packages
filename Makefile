@@ -104,7 +104,7 @@ FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RP
 .PHONY: all stream deb rpm fips fips-deb fips-rpm fips-validated fips-companion \
         fips-validated-publish fips-validated-publish-deb fips-validated-publish-rpm \
         fips-validated-deb fips-validated-rpm fips-companion-deb fips-companion-rpm \
-        test lint clean help ci-targets ci-config expand-goals publish-tags publish-packages \
+        test lint clean help ci-targets ci-config expand-goals publish-tags publish-packages publish-check \
         $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS) $(FIPS_PARTS)
 
 all: stream fips
@@ -202,6 +202,16 @@ publish-tags:
 	@publish/tags.py list --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
 	    --arches "$(ARCHES)" --version "$(VERSION)" --revision "$(REVISION)" \
 	    --fips-validated "$(FIPS_VALIDATED)"
+
+# Refuse before building if the repository already holds what this run would
+# publish. The bucket is the real state: tags are written after the upload, so a
+# publish whose tag push failed leaves them behind reality.
+BUCKET ?=
+publish-check:
+	@publish/is_published.py check --bucket "$(BUCKET)" \
+	    --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
+	    --arches "$(ARCHES)" --version "$(VERSION)" --revision "$(REVISION)" \
+	    --stream "$(STREAM)" --fips-validated "$(FIPS_VALIDATED)"
 
 # The source packages those goals publish, which is not everything the run
 # builds: a validated-module publish builds streams only to test against.
