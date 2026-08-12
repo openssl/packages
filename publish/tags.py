@@ -64,6 +64,13 @@ def manifest(kinds, stream, version, revision, fips_validated, arches):
             in wanted(kinds, stream, version, fips_validated, arches)]
 
 
+def releases(kinds):
+    """The release targets a run publishes, whose repository slices it will
+    regenerate. The kinds are separate everywhere else because they have
+    separate lifecycles; an index does not care which kind touched it."""
+    return sorted(set(kinds["stream"]) | set(kinds["validated"]) | set(kinds["companion"]))
+
+
 def packages(kinds, stream, fips_validated):
     """The source packages a run publishes, as they are named in output/.
 
@@ -96,6 +103,11 @@ def cmd_manifest(args):
         print(line)
 
 
+def cmd_releases(args):
+    for release in releases(expand(args.goals, args.targets.split())):
+        print(release)
+
+
 def cmd_packages(args):
     kinds = expand(args.goals, args.targets.split())
     for package in packages(kinds, args.stream, args.fips_validated.split()):
@@ -116,6 +128,11 @@ def main(argv):
                  "fips-validated", "arches"):
         body.add_argument(f"--{flag}", required=True)
     body.set_defaults(run=cmd_manifest)
+
+    slices = sub.add_parser("releases", help="the release targets a run publishes")
+    for flag in ("targets", "goals"):
+        slices.add_argument(f"--{flag}", required=True)
+    slices.set_defaults(run=cmd_releases)
 
     lister = sub.add_parser("packages", help="the source packages a run publishes")
     for flag in ("targets", "goals", "stream", "fips-validated"):

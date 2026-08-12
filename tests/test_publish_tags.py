@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(REPO, "publish"))
 sys.path.insert(0, os.path.join(REPO, "build"))
 from goals import expand  # noqa: E402
 from is_published import wanted  # noqa: E402
-from tags import identities, manifest, packages, tag  # noqa: E402
+from tags import identities, manifest, packages, releases, tag  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
@@ -118,3 +118,20 @@ def test_the_published_packages_are_the_ones_the_goals_name():
         ["openssl-fips3.1.2-upstream"]
     assert packages(expand("stream fips-companion", EVERY), "4.0", ["3.1.2"]) == \
         ["openssl4.0-upstream", "openssl4.0-upstream-fips"]
+
+
+def test_the_published_releases_are_the_slices_to_reindex():
+    """One list, deduplicated across kinds: an index does not care which kind
+    touched it, only that the release needs regenerating."""
+    assert releases(expand("deb-bookworm fips-deb-bookworm", EVERY)) == ["deb-bookworm"]
+    assert releases(expand("stream", EVERY)) == sorted(EVERY)
+    assert releases(expand("deb-forky", EVERY)) == []
+
+
+def test_every_published_package_belongs_to_a_reindexed_release():
+    """The repository would otherwise hold a package no index mentions."""
+    kinds = expand("all", EVERY)
+    reindexed = set(releases(kinds))
+    published = {f"{family}-{release}" for _, family, release, _, _
+                 in wanted(kinds, "4.0", "4.0.1", ["3.1.2"], ["amd64"])}
+    assert published <= reindexed
