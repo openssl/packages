@@ -10,8 +10,8 @@
 #   make test                    install + check in clean containers
 #   make lint ; make clean ; make help
 
-STREAM  := $(or $(STREAM),4.0)
 VERSION := $(or $(VERSION),4.0.1)
+STREAM  := $(basename $(VERSION))
 
 ARCH ?= amd64
 export ARCH
