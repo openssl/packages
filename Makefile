@@ -61,6 +61,13 @@ IMAGE_noble    = ubuntu:24.04
 IMAGE_resolute = ubuntu:26.04
 
 STAMPDIR = .stamps
+# A stamp names what it was built from: with only the target and arch in the
+# name, changing VERSION reuses the previous build and publishes it as the new
+# version.
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
+BUILT = $(VERSION)-$(REVISION)
+BUILT_VALIDATED = $(subst $(SPACE),-,$(strip $(FIPS_VALIDATED)))-$(REVISION)
 COMMON_SRCS = packaging/common/fips-enable.in packaging/common/setup-shlib-variant.sh \
               packaging/common/variant-target.conf.in packaging/common/enable.in \
               packaging/common/trust-anchors.in packaging/common/openssl-fips.cnf.in
@@ -124,41 +131,42 @@ fips-companion-rpm: $(FIPS_COMP_RPM)
 $(FIPS_DEB_TARGETS): fips-deb-%: fips-validated-deb-% fips-companion-deb-%
 $(FIPS_RPM_TARGETS): fips-rpm-el%: fips-validated-rpm-el% fips-companion-rpm-el%
 
-$(FIPS_VALID_DEB): fips-validated-deb-%: $(STAMPDIR)/fips-validated-deb-%-$(ARCH)
-$(FIPS_VALID_RPM): fips-validated-rpm-el%: $(STAMPDIR)/fips-validated-rpm-el%-$(ARCH)
-$(FIPS_COMP_DEB): fips-companion-deb-%: $(STAMPDIR)/fips-companion-deb-%-$(ARCH)
-$(FIPS_COMP_RPM): fips-companion-rpm-el%: $(STAMPDIR)/fips-companion-rpm-el%-$(ARCH)
+$(FIPS_VALID_DEB): fips-validated-deb-%: $(STAMPDIR)/fips-validated-deb-%-$(ARCH)-$(BUILT_VALIDATED)
+$(FIPS_VALID_RPM): fips-validated-rpm-el%: $(STAMPDIR)/fips-validated-rpm-el%-$(ARCH)-$(BUILT_VALIDATED)
+$(FIPS_COMP_DEB): fips-companion-deb-%: $(STAMPDIR)/fips-companion-deb-%-$(ARCH)-$(BUILT)
+$(FIPS_COMP_RPM): fips-companion-rpm-el%: $(STAMPDIR)/fips-companion-rpm-el%-$(ARCH)-$(BUILT)
 
-$(STAMPDIR)/fips-validated-deb-%-$(ARCH): $(FIPS_DEB_SRCS) | $(STAMPDIR)
+$(STAMPDIR)/fips-validated-deb-%-$(ARCH)-$(BUILT_VALIDATED): $(FIPS_DEB_SRCS) | $(STAMPDIR)
 	$(foreach v,$(FIPS_VALIDATED),FIPS_CERT="$(CERT_$(v))" build/build-fips-deb.sh $(v) $* $(IMAGE_$*) &&) true
 	@touch $@
 
-$(STAMPDIR)/fips-companion-deb-%-$(ARCH): $(FIPS_DEB_SRCS) | $(STAMPDIR)
+$(STAMPDIR)/fips-companion-deb-%-$(ARCH)-$(BUILT): $(FIPS_DEB_SRCS) | $(STAMPDIR)
 	FIPS_STREAM=$(STREAM) build/build-fips-deb.sh $(VERSION) $* $(IMAGE_$*)
 	@touch $@
 
-$(STAMPDIR)/fips-validated-rpm-el%-$(ARCH): $(FIPS_RPM_SRCS) | $(STAMPDIR)
+$(STAMPDIR)/fips-validated-rpm-el%-$(ARCH)-$(BUILT_VALIDATED): $(FIPS_RPM_SRCS) | $(STAMPDIR)
 	$(foreach v,$(FIPS_VALIDATED),FIPS_CERT="$(CERT_$(v))" build/build-fips-rpm.sh $(v) $* &&) true
 	@touch $@
 
-$(STAMPDIR)/fips-companion-rpm-el%-$(ARCH): $(FIPS_RPM_SRCS) | $(STAMPDIR)
+$(STAMPDIR)/fips-companion-rpm-el%-$(ARCH)-$(BUILT): $(FIPS_RPM_SRCS) | $(STAMPDIR)
 	FIPS_STREAM=$(STREAM) build/build-fips-rpm.sh $(VERSION) $*
 	@touch $@
 
 test:
 	@mkdir -p output
-	STREAM=$(STREAM) FIPS_VERSION=$(FIPS_VERSION) REVISION=$(REVISION) \
+	STREAM=$(STREAM) VERSION=$(VERSION) FIPS_VERSION=$(FIPS_VERSION) \
+	    FIPS_VALIDATED="$(FIPS_VALIDATED)" REVISION=$(REVISION) \
 	    $(PYTEST) --junitxml=output/tests.xml $(PYTEST_ARGS)
 
 # Short names depend on their (arch-specific) stamp; the stamp rule does the work.
-$(DEB_TARGETS): deb-%: $(STAMPDIR)/deb-%-$(ARCH)
-$(RPM_TARGETS): rpm-el%: $(STAMPDIR)/rpm-el%-$(ARCH)
+$(DEB_TARGETS): deb-%: $(STAMPDIR)/deb-%-$(ARCH)-$(BUILT)
+$(RPM_TARGETS): rpm-el%: $(STAMPDIR)/rpm-el%-$(ARCH)-$(BUILT)
 
-$(STAMPDIR)/deb-%-$(ARCH): $(DEB_SRCS) | $(STAMPDIR)
+$(STAMPDIR)/deb-%-$(ARCH)-$(BUILT): $(DEB_SRCS) | $(STAMPDIR)
 	build/build-deb.sh $(STREAM) $(VERSION) $* $(IMAGE_$*)
 	@touch $@
 
-$(STAMPDIR)/rpm-el%-$(ARCH): $(RPM_SRCS) | $(STAMPDIR)
+$(STAMPDIR)/rpm-el%-$(ARCH)-$(BUILT): $(RPM_SRCS) | $(STAMPDIR)
 	build/build-rpm.sh $(STREAM) $(VERSION) $* almalinux:$*
 	@touch $@
 

@@ -2,6 +2,8 @@
 built target via the `target` fixture (see conftest.py)."""
 import pytest
 
+from conftest import VERSION
+
 
 @pytest.fixture
 def trust_restored(target):
@@ -31,6 +33,15 @@ def test_package_installed(target):
 def test_version_matches_stream(target):
     ver = target.out(f"{target.prefix}/bin/openssl version").split()[1]
     assert ver.startswith(target.stream + "."), f"got {ver}, expected {target.stream}.x"
+
+
+def test_version_is_the_one_this_run_asked_for(target):
+    """The stream prefix alone accepts any point release, so a build reused
+    under a new VERSION would pass while the publish tags name the new one."""
+    if not VERSION:
+        pytest.skip("VERSION unset; nothing to compare the packages against")
+    ver = target.out(f"{target.prefix}/bin/openssl version").split()[1]
+    assert ver == VERSION, f"packages are {ver}, but this run asked for {VERSION}"
 
 
 def test_system_openssl_untouched(target):

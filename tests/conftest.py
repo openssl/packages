@@ -26,6 +26,9 @@ import pytest
 STREAM = os.environ.get("STREAM", "4.0")
 # Must match what the packages under test were built with; make test passes it.
 REVISION = os.environ.get("REVISION", "1")
+# The exact upstream version this run asked for. Unset when the packages under
+# test were not built by this invocation, so the check it drives is skipped.
+VERSION = os.environ.get("VERSION", "")
 ARCH = os.environ.get("ARCH", "amd64")            # amd64 | arm64
 DEB_ARCH = {"amd64": "amd64", "arm64": "arm64"}[ARCH]
 RPM_ARCH = {"amd64": "x86_64", "arm64": "aarch64"}[ARCH]
