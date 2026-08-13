@@ -13,11 +13,15 @@ thing to what is built, what is published and what is recorded.
 """
 ALL_KINDS = ("stream", "validated", "companion")
 
-# Longest prefix first: 'fips-validated-deb' also starts with 'fips-'.
+# Longest prefix first: 'fips-validated-deb' also starts with 'fips-', and every
+# '-publish' variant starts with its plain counterpart.
+#
 # A '-publish' goal builds more than it publishes — the modules need stream
 # packages to be tested against — but what it publishes is the modules alone,
-# so it expands exactly as its plain counterpart does.
+# so each expands exactly as the goal it is the publish variant of.
 KINDS = (("fips-validated-publish", ("validated",)),
+         ("fips-companion-publish", ("companion",)),
+         ("fips-publish", ("validated", "companion")),
          ("fips-validated", ("validated",)),
          ("fips-companion", ("companion",)),
          ("fips", ("validated", "companion")))

@@ -7,10 +7,11 @@ name is a failure. The matrix-vs-Makefile check needs no packages and always run
 """
 import shutil
 import subprocess
+import tempfile
 
 import pytest
 
-from conftest import (COMPANION_REQUIRED, MATRIX, REPO, REQUIRE_TARGETS,
+from conftest import (COMPANION_REQUIRED, MATRIX, REPO, REQUIRE_TARGETS, required_targets,
                       STREAM_REQUIRED, VALIDATED_REQUIRED, pkgdir, target_name,
                       _main_pkgs)
 from test_fips import (COMPANION, FIPS_VALIDATED, _companion_dir,
@@ -77,3 +78,36 @@ def test_companion_fips_module_packages_present():
                and not _companion_pkgs_present(fam, rel)]
     assert not missing, \
         f"no companion FIPS module for stream {COMPANION}: " + "; ".join(missing)
+
+
+# Every goal the vocabulary accepts, crossed with every scope it can narrow to.
+_TARGETS = [target_name(fam, rel) for fam, rel, _ in MATRIX]
+_KINDS = ["fips", "fips-validated", "fips-companion",
+          "fips-publish", "fips-validated-publish", "fips-companion-publish"]
+GOALS = (["all", "stream", "deb", "rpm"] + _TARGETS
+         + [kind + scope for kind in _KINDS
+            for scope in ["", "-deb", "-rpm"] + [f"-{t}" for t in _TARGETS]])
+
+
+def test_every_goal_is_both_a_make_target_and_understood_by_the_grammar():
+    """The two halves have to agree. A goal make builds but the grammar cannot
+    expand publishes nothing, silently; a goal the grammar expands but make
+    cannot build fails the run late, after the pre-flight has passed.
+
+    "make knows it" has to mean "it builds something": a name listed in .PHONY
+    with no rule behind it exits 0 and does nothing, which is how a whole family
+    of goals went missing without any target failing.
+    """
+    if shutil.which("make") is None:
+        pytest.skip("make not available")
+    with tempfile.TemporaryDirectory() as stamps:
+        builds_nothing = []
+        for goal in GOALS:
+            r = subprocess.run(["make", "-n", goal, f"STAMPDIR={stamps}"], cwd=REPO,
+                               capture_output=True, text=True, timeout=60)
+            if r.returncode != 0 or "build/build-" not in r.stdout:
+                builds_nothing.append(goal)
+    assert not builds_nothing, "no make target builds: " + " ".join(builds_nothing)
+
+    covers_nothing = [goal for goal in GOALS if not any(required_targets(goal))]
+    assert not covers_nothing, "the grammar expands to nothing for: " + " ".join(covers_nothing)

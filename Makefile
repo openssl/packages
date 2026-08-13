@@ -95,14 +95,25 @@ FIPS_VALID_DEB = $(addprefix fips-validated-,$(DEB_TARGETS))
 FIPS_VALID_RPM = $(addprefix fips-validated-,$(RPM_TARGETS))
 FIPS_COMP_DEB  = $(addprefix fips-companion-,$(DEB_TARGETS))
 FIPS_COMP_RPM  = $(addprefix fips-companion-,$(RPM_TARGETS))
+# A module goal on its own cannot be tested: a module is only exercised inside a
+# stream install. The -publish variants add the streams for the same releases
+# without publishing them, so every module kind has one.
 FIPS_VALID_PUB_DEB = $(addprefix fips-validated-publish-,$(DEB_TARGETS))
 FIPS_VALID_PUB_RPM = $(addprefix fips-validated-publish-,$(RPM_TARGETS))
+FIPS_COMP_PUB_DEB  = $(addprefix fips-companion-publish-,$(DEB_TARGETS))
+FIPS_COMP_PUB_RPM  = $(addprefix fips-companion-publish-,$(RPM_TARGETS))
+FIPS_PUB_DEB = $(addprefix fips-publish-,$(DEB_TARGETS))
+FIPS_PUB_RPM = $(addprefix fips-publish-,$(RPM_TARGETS))
 FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RPM) \
-             $(FIPS_VALID_PUB_DEB) $(FIPS_VALID_PUB_RPM)
+             $(FIPS_VALID_PUB_DEB) $(FIPS_VALID_PUB_RPM) \
+             $(FIPS_COMP_PUB_DEB) $(FIPS_COMP_PUB_RPM) \
+             $(FIPS_PUB_DEB) $(FIPS_PUB_RPM)
 
 .DEFAULT_GOAL := help
 .PHONY: all stream deb rpm fips fips-deb fips-rpm fips-validated fips-companion \
         fips-validated-publish fips-validated-publish-deb fips-validated-publish-rpm \
+        fips-companion-publish fips-companion-publish-deb fips-companion-publish-rpm \
+        fips-publish fips-publish-deb fips-publish-rpm \
         fips-validated-deb fips-validated-rpm fips-companion-deb fips-companion-rpm \
         test lint clean help ci-targets ci-config plan-tag plan-manifest plan-packages plan-releases check-published \
         $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS) $(FIPS_PARTS)
@@ -124,9 +135,19 @@ fips-companion: fips-companion-deb fips-companion-rpm
 fips-validated-publish: fips-validated stream
 fips-validated-publish-deb: fips-validated-deb deb
 fips-validated-publish-rpm: fips-validated-rpm rpm
+fips-companion-publish: fips-companion stream
+fips-companion-publish-deb: fips-companion-deb deb
+fips-companion-publish-rpm: fips-companion-rpm rpm
+fips-publish: fips stream
+fips-publish-deb: fips-deb deb
+fips-publish-rpm: fips-rpm rpm
 
 $(FIPS_VALID_PUB_DEB): fips-validated-publish-deb-%: fips-validated-deb-% deb-%
 $(FIPS_VALID_PUB_RPM): fips-validated-publish-rpm-el%: fips-validated-rpm-el% rpm-el%
+$(FIPS_COMP_PUB_DEB): fips-companion-publish-deb-%: fips-companion-deb-% deb-%
+$(FIPS_COMP_PUB_RPM): fips-companion-publish-rpm-el%: fips-companion-rpm-el% rpm-el%
+$(FIPS_PUB_DEB): fips-publish-deb-%: fips-deb-% deb-%
+$(FIPS_PUB_RPM): fips-publish-rpm-el%: fips-rpm-el% rpm-el%
 
 fips-validated-deb: $(FIPS_VALID_DEB)
 fips-validated-rpm: $(FIPS_VALID_RPM)
@@ -258,7 +279,7 @@ help:
 	@echo "  fips-<target>       both module kinds for one release"
 	@echo "  fips-validated[-…]  pinned validated modules only"
 	@echo "  fips-companion[-…]  the stream's companion module only"
-	@echo "  fips-validated-publish[-…]  validated modules + the streams they test against"
+	@echo "  …-publish[-…]       a module goal plus the streams it is tested against"
 	@echo "  test                run the package test suite (pytest, in containers)"
 	@echo "  lint                shellcheck the shell scripts and templates"
 	@echo "  clean               remove built packages and stamps"
