@@ -9,7 +9,7 @@
 #       gs://some-bucket repo output deb-bookworm rpm-el9
 set -euo pipefail
 
-USAGE='usage: make-repo.sh --packages "<name>..." <bucket-url> <repo-dir> <package-dir> <target>...'
+USAGE='usage: make-repo.sh --packages "<name>..." [--record <file>] <bucket-url> <repo-dir> <package-dir> <target>...'
 
 # Which source packages to index. Required, and an argument rather than one of
 # the REPO_* overrides below: those are deployment settings with sane defaults,
@@ -18,9 +18,15 @@ USAGE='usage: make-repo.sh --packages "<name>..." <bucket-url> <repo-dir> <packa
 # streams its modules are tested against — so a forgotten value must be an error
 # and not "index whatever the build left behind".
 PACKAGES=
+# Where to log every file this run adds to the repository, one repository-relative
+# path per line. It is what the publish tag records: an observed list, not a
+# derived one, so it names the binaries that were really published — sub-packages
+# and all — with the suite qualifier and dist tag the build gave them.
+RECORD=
 while [ $# -gt 0 ]; do
     case "$1" in
         --packages) PACKAGES=${2:?$USAGE}; shift 2 ;;
+        --record) RECORD=${2:?$USAGE}; shift 2 ;;
         --) shift; break ;;
         -*) echo "unknown option $1" >&2; echo "$USAGE" >&2; exit 1 ;;
         *) break ;;
@@ -33,6 +39,12 @@ REPO=${2:?$USAGE}
 PKGDIR=${3:?$USAGE}
 shift 3
 [ $# -gt 0 ] || { echo "no targets given" >&2; echo "$USAGE" >&2; exit 1; }
+[ -z "$RECORD" ] || : > "$RECORD"
+
+record() {
+    [ -n "$RECORD" ] || return 0
+    printf '%s\n' "${1#"$REPO"/}" >> "$RECORD"
+}
 
 ORIGIN=${REPO_ORIGIN:-OpenSSL}
 LABEL=${REPO_LABEL:-OpenSSL}
@@ -80,6 +92,7 @@ place() {
             exit 1
         fi
         cp -f "$name" "$dst/"
+        record "$dst/$(basename "$name")"
     done
 }
 
@@ -153,6 +166,7 @@ make_rpm_repo() {
                     exit 1
                 fi
                 cp -f "$rpm" "$r/"
+                record "$r/$(basename "$rpm")"
                 n=$((n + 1))
                 FOUND=1
             done < <(find "$dir" -maxdepth 1 -type f \

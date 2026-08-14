@@ -14,6 +14,7 @@ import pytest
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "lib"))
 from _goals import expand  # noqa: E402
+from is_published import parse_deb, parse_rpm  # noqa: E402
 from plan import (identities, manifest, packages, releases, tag,  # noqa: E402
                   wanted)
 
@@ -93,16 +94,47 @@ def test_the_annotation_records_every_package_release_and_arch():
     ])
 
 
-def test_the_annotation_covers_exactly_what_the_pre_flight_checked():
-    """The record and the guard must describe the same publish: a tag claiming
-    more, or less, than was checked against the bucket would be a false record.
+# What make-repo.sh --record writes: the files a run added, as repository-relative
+# paths. Sub-packages included, which is the reason the annotation records this
+# rather than a list derived from the goals.
+RECORD = [
+    "deb/pool/bookworm/main/o/openssl4.0-upstream/openssl4.0-upstream_4.0.1-5+deb12_amd64.deb",
+    "deb/pool/bookworm/main/o/openssl4.0-upstream/openssl4.0-upstream-dev_4.0.1-5+deb12_amd64.deb",
+    "deb/pool/bookworm/main/o/openssl4.0-upstream/openssl4.0-upstream-dbgsym_4.0.1-5+deb12_amd64.deb",
+    "deb/pool/bookworm/main/o/openssl4.0-upstream-fips/openssl4.0-upstream-fips_4.0.1-5+deb12_amd64.deb",
+    "rpm/el10/x86_64/openssl4.0-upstream-4.0.1-5.el10.x86_64.rpm",
+    "rpm/el10/x86_64/openssl4.0-upstream-devel-4.0.1-5.el10.x86_64.rpm",
+]
+
+
+def test_a_recorded_publish_stays_within_what_the_goals_planned():
+    """The annotation is observed and the plan is derived, so they can disagree.
+    A file whose package or release is outside the plan means the run put
+    something in the repository it never intended to publish.
     """
-    kinds = expand("all", EVERY)
-    want = wanted(kinds, "4.0", "4.0.1", ["3.1.2"], ["amd64", "arm64"])
-    lines = manifest(kinds, "4.0", "4.0.1", "1", ["3.1.2"], ["amd64", "arm64"])
-    assert len(lines) == len(want)
-    assert {(p, f"{f}-{r}", a) for p, f, r, a, _ in want} == \
-        {(line.split()[0], line.split()[2], line.split()[3]) for line in lines}
+    kinds = expand("deb-bookworm fips-companion-deb-bookworm rpm-el10",
+                   ["deb-bookworm", "rpm-el10"])
+    planned_packages = packages(kinds, "4.0", ["3.1.2"])
+    planned_releases = releases(kinds)
+    for path in RECORD:
+        parsed = parse_deb(path) if path.endswith(".deb") else parse_rpm(path)
+        assert parsed, f"unparsable record entry: {path}"
+        name, release, _, _ = parsed
+        assert any(name.startswith(pkg) for pkg in planned_packages), \
+            f"{path} is not a package these goals publish"
+        family = "deb" if path.endswith(".deb") else "rpm"
+        assert f"{family}-{release}" in planned_releases, \
+            f"{path} is in a release these goals do not reindex"
+
+
+def test_a_record_outside_the_plan_is_caught():
+    """The validated module was not among the goals, so recording it is a bug."""
+    kinds = expand("deb-bookworm fips-companion-deb-bookworm", ["deb-bookworm", "rpm-el10"])
+    planned = packages(kinds, "4.0", ["3.1.2"])
+    stray = ("deb/pool/bookworm/main/o/openssl-fips3.1.2-upstream/"
+             "openssl-fips3.1.2-upstream_3.1.2-1+deb12_amd64.deb")
+    name = parse_deb(stray)[0]
+    assert not any(name.startswith(pkg) for pkg in planned)
 
 
 def test_a_validated_module_is_recorded_at_its_own_version():
