@@ -115,7 +115,7 @@ FIPS_PARTS = $(FIPS_VALID_DEB) $(FIPS_VALID_RPM) $(FIPS_COMP_DEB) $(FIPS_COMP_RP
         fips-companion-publish fips-companion-publish-deb fips-companion-publish-rpm \
         fips-publish fips-publish-deb fips-publish-rpm \
         fips-validated-deb fips-validated-rpm fips-companion-deb fips-companion-rpm \
-        test lint clean help ci-targets ci-config plan-tag plan-manifest plan-packages plan-releases check-published \
+        test lint clean help ci-targets plan-tag plan-packages plan-releases check-published \
         $(DEB_TARGETS) $(RPM_TARGETS) $(FIPS_DEB_TARGETS) $(FIPS_RPM_TARGETS) $(FIPS_PARTS)
 
 all: stream fips
@@ -224,22 +224,6 @@ plan-tag:
 	    --version "$(VERSION)" --revision "$(REVISION)" \
 	    --fips-validated "$(FIPS_VALIDATED)" --stamp "$(STAMP)"
 
-# What the tag's annotation records: every package, release and arch published.
-plan-manifest:
-	@lib/plan.py manifest --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
-	    --stream "$(STREAM)" --version "$(VERSION)" --revision "$(REVISION)" \
-	    --fips-validated "$(FIPS_VALIDATED)" --arches "$(ARCHES)"
-
-# Refuse before building if the repository already holds what this run would
-# publish. The bucket is the real state: tags are written after the upload, so a
-# publish whose tag push failed leaves them behind reality.
-BUCKET ?=
-check-published:
-	@lib/is_published.py check --bucket "$(BUCKET)" \
-	    --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)" \
-	    --arches "$(ARCHES)" --version "$(VERSION)" --revision "$(REVISION)" \
-	    --stream "$(STREAM)" --fips-validated "$(FIPS_VALIDATED)"
-
 # The releases those goals publish, whose repository indexes have to be
 plan-releases:
 	@lib/plan.py releases --targets "$(DEB_TARGETS) $(RPM_TARGETS)" --goals "$(GOALS)"
@@ -253,14 +237,6 @@ plan-packages:
 # One target name per line, for CI to build its job matrix from.
 ci-targets:
 	@printf '%s\n' $(DEB_TARGETS) $(RPM_TARGETS)
-
-ci-config:
-	@printf '%s\n' \
-	    'STREAM=$(STREAM)' \
-	    'VERSION=$(VERSION)' \
-	    'REVISION=$(REVISION)' \
-	    'FIPS_VALIDATED=$(FIPS_VALIDATED)' \
-	    'CI_TARGETS=$(DEB_TARGETS) $(RPM_TARGETS)'
 
 clean:
 	rm -rf output $(STAMPDIR)

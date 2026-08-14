@@ -15,8 +15,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "lib"))
 from _goals import expand  # noqa: E402
 from is_published import parse_deb, parse_rpm  # noqa: E402
-from plan import (identities, manifest, packages, releases, tag,  # noqa: E402
-                  wanted)
+from plan import (identities, packages, releases, tag, wanted)  # noqa: E402
 
 pytestmark = pytest.mark.unit
 
@@ -81,19 +80,6 @@ def test_the_name_stays_short_with_many_validated_versions():
     assert all(len(part.encode()) <= 255 for part in name.split("/"))
 
 
-def test_the_annotation_records_every_package_release_and_arch():
-    lines = manifest(expand("deb-bookworm fips-deb-bookworm", EVERY), "4.0", "4.0.1",
-                     "1", ["3.1.2"], ["amd64", "arm64"])
-    assert sorted(lines) == sorted([
-        "openssl4.0-upstream 4.0.1-1 deb-bookworm amd64",
-        "openssl4.0-upstream-fips 4.0.1-1 deb-bookworm amd64",
-        "openssl-fips3.1.2-upstream 3.1.2-1 deb-bookworm amd64",
-        "openssl4.0-upstream 4.0.1-1 deb-bookworm arm64",
-        "openssl4.0-upstream-fips 4.0.1-1 deb-bookworm arm64",
-        "openssl-fips3.1.2-upstream 3.1.2-1 deb-bookworm arm64",
-    ])
-
-
 # What make-repo.sh --record writes: the files a run added, as repository-relative
 # paths. Sub-packages included, which is the reason the annotation records this
 # rather than a list derived from the goals.
@@ -135,13 +121,6 @@ def test_a_record_outside_the_plan_is_caught():
              "openssl-fips3.1.2-upstream_3.1.2-1+deb12_amd64.deb")
     name = parse_deb(stray)[0]
     assert not any(name.startswith(pkg) for pkg in planned)
-
-
-def test_a_validated_module_is_recorded_at_its_own_version():
-    lines = manifest(expand("fips-validated-publish", EVERY), "4.0", "4.0.1", "1",
-                     ["3.1.2"], ["amd64"])
-    assert all("3.1.2-1" in line for line in lines)
-    assert not any("4.0.1" in line for line in lines)
 
 
 def test_the_published_packages_are_the_ones_the_goals_name():

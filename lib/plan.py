@@ -9,10 +9,6 @@ annotation; the pipeline creates it after a successful publish:
 
     $ make -s plan-tag GOALS="stream fips-companion" STAMP=20260812T121318Z
     publish/4.0.1-1/20260812T121318Z
-    $ make -s plan-manifest GOALS="stream fips-companion" ARCHES="amd64 arm64"
-    openssl4.0-upstream 4.0.1-1 deb-bookworm amd64
-    …
-
 The name carries the version-revisions published and a UTC stamp, which is what
 makes it unique per publish: a backfill, a second architecture and a module-only
 publish can all touch the same version-revision. Everything else — the goals,
@@ -79,17 +75,6 @@ def tag(kinds, version, revision, fips_validated, stamp):
     return f"publish/{'+'.join(named)}/{stamp}"
 
 
-def manifest(kinds, stream, version, revision, fips_validated, arches):
-    """The annotation body: every package, release and arch the run published.
-
-    Reuses the pre-flight's own expansion, so the record cannot describe
-    something different from what was checked against the bucket.
-    """
-    return [f"{package} {package_version}-{revision} {family}-{release} {arch}"
-            for package, family, release, arch, package_version
-            in wanted(kinds, stream, version, fips_validated, arches)]
-
-
 def releases(kinds):
     """The release targets a run publishes, whose repository slices it will
     regenerate. The kinds are separate everywhere else because they have
@@ -122,13 +107,6 @@ def cmd_name(args):
     print(named)
 
 
-def cmd_manifest(args):
-    kinds = expand(args.goals, args.targets.split())
-    for line in manifest(kinds, args.stream, args.version, args.revision,
-                         args.fips_validated.split(), args.arches.split()):
-        print(line)
-
-
 def cmd_releases(args):
     for release in releases(expand(args.goals, args.targets.split())):
         print(release)
@@ -148,12 +126,6 @@ def main(argv):
     for flag in ("targets", "goals", "version", "revision", "fips-validated", "stamp"):
         namer.add_argument(f"--{flag}", required=True)
     namer.set_defaults(run=cmd_name)
-
-    body = sub.add_parser("manifest", help="what the tag's annotation records")
-    for flag in ("targets", "goals", "stream", "version", "revision",
-                 "fips-validated", "arches"):
-        body.add_argument(f"--{flag}", required=True)
-    body.set_defaults(run=cmd_manifest)
 
     slices = sub.add_parser("releases", help="the release targets a run publishes")
     for flag in ("targets", "goals"):
